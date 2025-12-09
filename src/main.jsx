@@ -4,6 +4,7 @@ import App from "./App";
 
 import "./assets/scss/dashlite.scss";
 import "./assets/scss/style-email.scss";
+import "./assets/swagger.css";
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <>
