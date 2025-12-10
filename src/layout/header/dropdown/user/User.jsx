@@ -4,10 +4,14 @@ import { Icon } from "@/components/Component";
 import { LinkList, LinkItem } from "@/components/links/Links";
 import UserAvatar from "@/components/user/UserAvatar";
 import { useTheme, useThemeUpdate } from "@/layout/provider/Theme";
+import { useAuth } from "@/context/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 const User = () => {
   const theme = useTheme();
   const themeUpdate = useThemeUpdate();
+  const { logout, user } = useAuth();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const toggle = () => setOpen((prevState) => !prevState);
 
@@ -25,7 +29,7 @@ const User = () => {
           <UserAvatar icon="user-alt" className="sm" />
           <div className="user-info d-none d-md-block">
             <div className="user-status">Administrator</div>
-            <div className="user-name dropdown-indicator">Abu Bin Ishityak</div>
+            <div className="user-name dropdown-indicator">{user?.email || "User"}</div>
           </div>
         </div>
       </DropdownToggle>
@@ -36,8 +40,8 @@ const User = () => {
               <span>AB</span>
             </div>
             <div className="user-info">
-              <span className="lead-text">Abu Bin Ishtiyak</span>
-              <span className="sub-text">info@softnio.com</span>
+              <span className="lead-text">{user?.email || "User"}</span>
+              <span className="sub-text">Signed in</span>
             </div>
           </div>
         </div>
@@ -69,9 +73,21 @@ const User = () => {
         </div>
         <div className="dropdown-inner">
           <LinkList>
-            <LinkItem icon="signout" link={`/auth-login`}>
-              Sign Out
-            </LinkItem>
+            <li>
+              <a
+                className="link"
+                href="#logout"
+                onClick={(e) => {
+                  e.preventDefault();
+                  toggle();
+                  logout();
+                  navigate("/login", { replace: true });
+                }}
+              >
+                <Icon name="signout" />
+                <span>Sign Out</span>
+              </a>
+            </li>
           </LinkList>
         </div>
       </DropdownMenu>

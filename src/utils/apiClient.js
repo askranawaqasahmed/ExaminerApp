@@ -21,10 +21,18 @@ export const buildUrl = (baseUrl = "", path = "", query) => {
   return url.toString();
 };
 
-export const createApiClient = ({ baseUrl = "", getToken } = {}) => {
+export const createApiClient = ({ baseUrl = "", getToken, tokenPrefix = "Bearer" } = {}) => {
   const normalizedBase = baseUrl?.replace(/\/+$/, "");
 
-  return async function request({ path = "", method = "GET", query, body, headers = {}, signal } = {}) {
+  return async function request({
+    path = "",
+    method = "GET",
+    query,
+    body,
+    headers = {},
+    signal,
+    skipToken = false,
+  } = {}) {
     const upperMethod = method.toUpperCase();
     const token = typeof getToken === "function" ? getToken() : getToken;
     const targetUrl = buildUrl(normalizedBase, path, query);
@@ -34,8 +42,9 @@ export const createApiClient = ({ baseUrl = "", getToken } = {}) => {
       ...headers,
     };
 
-    if (token) {
-      finalHeaders.Authorization = `Bearer ${token}`;
+    if (token && !skipToken) {
+      const prefix = tokenPrefix === false ? "" : tokenPrefix ? `${tokenPrefix} ` : "";
+      finalHeaders.Authorization = `${prefix}${token}`;
     }
 
     const init = {

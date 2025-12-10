@@ -19,7 +19,7 @@ const ThemeProvider = ({...props}) => {
     main: "default", //other value can be passed "bordered"
     sidebar: "white", //other value can be passed "light,dark,theme"
     sidebarCompact: false,
-    sidebarVisibility: false,
+    sidebarVisibility: true,
     sidebarMobile: false,
     header: "white", //other value can be passed "light,dark,theme"
     skin: "light", //other value can be passed "dark"
@@ -88,9 +88,9 @@ const ThemeProvider = ({...props}) => {
   useEffect(() => {
     const handleMobileSidebar = () => {
         if (window.innerWidth < 1200) {
-          setTheme({...theme, sidebarMobile : true})
+          setTheme({...theme, sidebarMobile : true, sidebarVisibility: false})
         } else {
-          setTheme({...theme, sidebarMobile : false, sidebarVisibility : false})
+          setTheme({...theme, sidebarMobile : false, sidebarVisibility : true})
         }
     }
 

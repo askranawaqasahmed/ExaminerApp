@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useParams } from "react-router-dom";
 import SidebarNav from "@/components/swagger/SidebarNav";
 import OperationRunner from "@/components/swagger/OperationRunner";
 import useSwagger from "@/hooks/useSwagger";
@@ -75,28 +76,47 @@ const buildOperations = (spec) => {
 };
 
 const ApiExplorer = () => {
+  const { tag: tagParam } = useParams();
   const [swaggerUrl, setSwaggerUrl] = useState(DEFAULT_SWAGGER_URL);
   const [swaggerInput, setSwaggerInput] = useState(DEFAULT_SWAGGER_URL);
   const [baseUrlOverride, setBaseUrlOverride] = useState("");
   const [token, setToken] = useState("");
+  const [useProxy, setUseProxy] = useState(true);
+  const [activeTag, setActiveTag] = useState(null);
 
-  const { spec, loading, error, refetch } = useSwagger(swaggerUrl);
+  const { spec, loading, error, refetch, proxyUsed } = useSwagger(swaggerUrl, { useProxy });
 
   const operationsByTag = useMemo(() => buildOperations(spec), [spec]);
+  const visibleGroups = useMemo(() => {
+    if (!activeTag) return operationsByTag;
+    const filtered = operationsByTag.filter((g) => g.tag.toLowerCase() === activeTag.toLowerCase());
+    return filtered.length ? filtered : operationsByTag;
+  }, [operationsByTag, activeTag]);
+
   const flatOperations = useMemo(
     () => operationsByTag.reduce((all, group) => all.concat(group.operations), []),
     [operationsByTag]
+  );
+  const visibleOperations = useMemo(
+    () => visibleGroups.reduce((all, group) => all.concat(group.operations), []),
+    [visibleGroups]
   );
 
   const [activeOperationId, setActiveOperationId] = useState(null);
 
   useEffect(() => {
-    if (flatOperations.length) {
-      setActiveOperationId(flatOperations[0].id);
+    const incomingTag = tagParam ? decodeURIComponent(tagParam) : null;
+    setActiveTag(incomingTag);
+  }, [tagParam]);
+
+  useEffect(() => {
+    const pool = visibleOperations.length ? visibleOperations : flatOperations;
+    if (pool.length) {
+      setActiveOperationId(pool[0].id);
     } else {
       setActiveOperationId(null);
     }
-  }, [flatOperations]);
+  }, [flatOperations, visibleOperations]);
 
   const activeOperation = useMemo(
     () => flatOperations.find((op) => op.id === activeOperationId),
@@ -120,7 +140,7 @@ const ApiExplorer = () => {
     <div className="swagger-app">
       <header className="swagger-topbar">
         <div className="swagger-brand">
-          <h1>Examiner API Console</h1>
+          <h1>API Console</h1>
           <p>Navigation and CRUD runner generated directly from your Swagger file.</p>
         </div>
         <div className="swagger-top-controls">
@@ -137,6 +157,21 @@ const ApiExplorer = () => {
                 {loading ? "Loading..." : "Load"}
               </button>
             </div>
+          </div>
+          <div className="swagger-field">
+            <span className="swagger-field-label">CORS Proxy</span>
+            <label className="swagger-toggle">
+              <input
+                type="checkbox"
+                checked={useProxy}
+                onChange={(e) => setUseProxy(e.target.checked)}
+              />
+              <span>Use built-in proxy if direct fetch is blocked</span>
+            </label>
+            <span className="swagger-help">
+              Browsers block cross-origin Swagger fetches without CORS. Turn this on to route via a public proxy during
+              development; for production, serve the app and API under the same domain or add a backend proxy.
+            </span>
           </div>
           <div className="swagger-field">
             <span className="swagger-field-label">API Base URL</span>
@@ -161,7 +196,7 @@ const ApiExplorer = () => {
 
       <div className="swagger-body">
         <SidebarNav
-          groups={operationsByTag}
+          groups={visibleGroups}
           selectedOperationId={activeOperationId}
           onSelect={setActiveOperationId}
         />
@@ -178,6 +213,12 @@ const ApiExplorer = () => {
                 <div>
                   <span className="swagger-meta-key">Detected base URL</span>
                   <span className="swagger-meta-value">{detectedBaseUrl || "Not provided in Swagger"}</span>
+                </div>
+                <div>
+                  <span className="swagger-meta-key">CORS</span>
+                  <span className="swagger-meta-value">
+                    {proxyUsed ? `Using proxy (${proxyUsed})` : useProxy ? "Direct (proxy on standby)" : "Direct only"}
+                  </span>
                 </div>
                 <div>
                   <span className="swagger-meta-key">Operations</span>

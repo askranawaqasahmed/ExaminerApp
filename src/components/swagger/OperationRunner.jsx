@@ -133,7 +133,19 @@ const OperationRunner = ({ operation, baseUrl, token }) => {
     setError(null);
   }, [operation, contentTypes, acceptTypes]);
 
-  const client = useMemo(() => createApiClient({ baseUrl, getToken: () => token }), [baseUrl, token]);
+  const resolvedOpPath = (operation?.path || "").toLowerCase();
+  const shouldSkipToken = resolvedOpPath.includes("/auth/login");
+  const client = useMemo(
+    () =>
+      createApiClient({
+        baseUrl,
+        getToken: () => {
+          if (shouldSkipToken) return undefined;
+          return token;
+        },
+      }),
+    [baseUrl, token, shouldSkipToken]
+  );
 
   const handleParamChange = (name, value) => {
     setParamValues((prev) => ({ ...prev, [name]: value }));
