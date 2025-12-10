@@ -1,29 +1,41 @@
 # ExaminerApp Integration Notes
 
 ## Layout & Navigation
-- The app now uses the original DashLite theme layout (`src/layout/Index.jsx` + `ThemeProvider`) so the left sidebar and header appear again.
-- Sidebar menu entries have been customized to point at the core experiences: `Dashboard`, one entry per Swagger module (`Auth`, `Class`, `Exam`, `Question`, `School`, `Student`), and an “All Operations” link that opens the Swagger-driven console.
-- Routing (in `src/route/Index.jsx`) protects every page behind authentication. `/login` uses the themed login screen; authenticated users are redirected to `/dashboard` by default. The “Class” entry now renders a dedicated class CRUD page (`src/pages/classes/ClassList.jsx`).
+- The app reuses the DashLite theme layout (`src/layout/Index.jsx` + `ThemeProvider`), but the sidebar now lists just the essential flows: `Dashboard`, `Class`, `Exam`, `Question`, `School`, `Student`, and the Swagger console (`/api-explorer`). That keeps the navigation focused while keeping `/dashboard` as the default landing route.
+- Routing (`src/route/Index.jsx`) protects every page behind authentication; `/login` renders the themed login screen and redirects authenticated users back to `/dashboard`.
 
 ## Authentication
 - `src/context/AuthContext.jsx` centrally manages token/email state and persists them under `examiner-auth-token`.
-- Login now calls `POST /api/auth/login` with `{ username, password }` and stores the returned `token` (plus user email). The Swagger console, Class CRUD page, and other clients use this token for every request.
-- Logout is wired to the theme’s user dropdown (`src/layout/header/dropdown/user/User.jsx`), clearing the token/email and routing back to `/login`.
-- `src/pages/auth/Login.jsx` pre-fills the approved credentials (`superadmin@examiner.com` / `SuperAdmin@123`) and shows a loader while authenticating.
+- Login calls `POST /api/auth/login` with `{ username, password }` and stores the returned `token`/email. The Swagger console, CRUD clients, and download links use this token for non-public calls.
+- Logout hooks into the user dropdown (`src/layout/header/dropdown/user/User.jsx`), clearing the token/email and pushing the user back to `/login`.
+- `src/pages/auth/Login.jsx` pre-fills approved credentials (`superadmin@examiner.com` / `SuperAdmin@123`) and shows a loader while authenticating.
 
 ## API Client & Console
-- `src/utils/apiClient.js` exports a generic `createApiClient` that handles base URL resolution, query/ body serialization, and Authorization headers (with a `skipToken` toggle for login).
-- The API console fetches the Swagger doc at runtime via `src/hooks/useSwagger.js`, builds grouped navigation, and renders operations in `src/components/swagger/OperationRunner.jsx`. CRUD inputs for all parameters/bodies are supported, and responses are prettified.
-- Sidebar navigation updates to filter operations by module tag when you visit `/api-explorer/<tag>`.
-- Token is sent as `Authorization: Bearer <token>` for every request except login.
+- `src/utils/apiClient.js` exports a generic `createApiClient` that builds URLs, serializes bodies/queries, and attaches `Authorization` headers (with a `skipToken` toggle for login).
+- The API console fetches Swagger at runtime via `src/hooks/useSwagger.js`, edifies grouped navigation, and renders operations with `src/components/swagger/OperationRunner.jsx`. CRUD inputs for all parameters/bodies are supported, and responses are prettified.
+- Sidebar navigation filters operations by the current module tag when visiting `/api-explorer/<tag>`, and the downloaded tokens are sent as `Authorization: Bearer <token>` on every request except login.
 
 ## Class CRUD Experience
-- `src/pages/classes/ClassList.jsx` lists classes and supports create/edit/delete via the Examiner API (uses the shared API client).
-- A slider drawer (same pattern as `nk-add-product`) contains the form (name, description, school dropdown). The dropdown is populated from `GET /api/schools`.
-- Creating now posts to `/api/classes`, editing calls `/api/classes/{id}/update`, deleting goes through `/api/classes/{id}/delete`, and success/error messages are shown inline.
-- “New Class” opens the drawer; edit buttons preload the form.
+- `src/pages/classes/ClassList.jsx` lists classes using the shared client and the `/api/classes` endpoints.
+- The `nk-add-product` drawer handles `name`, `section`, and `school` selection (schools from `GET /api/schools`). Creating posts to `/api/classes`, editing hits `/api/classes/{id}/update`, and deleting goes through `/api/classes/{id}/delete`, with inline alerts for success/errors.
+- The grid shows class name, school name, and section, with edit/delete actions preloading the drawer or calling the delete endpoint.
+
+## Exam CRUD Experience
+- `/api/exams` is surfaced by `src/pages/exams/ExamList.jsx`, which displays exam name, subject, class information, date, total marks, and question count.
+- The drawer submits `name`, `subject`, `school`, `class`, `totalMarks`, `questionCount`, and `examDate` to `/api/exams`, `/api/exams/{id}/update`, and `/api/exams/{id}/delete`. The school dropdown drives the class dropdown so only matching classes appear.
+
+## Question CRUD Experience
+- `/api/questions` is managed by `src/pages/questions/QuestionList.jsx`. Questions are filtered by exam (`GET /api/questions/by-exam/{examId}`) and saved via `/api/questions` or `/api/questions/{id}/update`. Deletions hit `/api/questions/{id}/delete`.
+- The table shows question number, text, options, and the correct answer; the drawer captures all four options plus the right option and ties each question to an exam.
+
+## School & Student CRUD
+- `/schools` (`src/pages/schools/SchoolList.jsx`) uses POST-based create/update/delete calls to `/api/schools`, `/api/schools/{id}/update`, and `/api/schools/{id}/delete`, with name/code/address inputs and the same drawer experience.
+- `/students` (`src/pages/students/StudentList.jsx`) orchestrates student number, name, username, password, school, and class. Student creation hits `/api/students`, updates go to `/api/students/{id}/update`, and deletes call `/api/students/{id}/delete`. Username cannot be edited once set, and leaving the password blank keeps the existing value.
+
+## Dashboard Enhancements
+- `/dashboard` now shows two download buttons beside the title that stream the provided PNG assets (`src/images/sheet_questions.png` and `src/images/sheet_answer.png`) via the browser’s `download` attribute, giving a quick way to grab the questionsheet and answersheet during review.
+- The header layout keeps the Reports toggle and Pokémon stats while the download buttons and CTA nest inside the same BlockHead controls for consistent spacing.
 
 ## Notes
-- The docs ship with `/api-explorer`, `/classes`, and `/dashboard` routes, all rendered inside the standard layout.
 - You can change `VITE_API_BASE` to point at a different backend (defaults to `https://examiner.ideageek.pk`).
-- For production, swap the placeholder login form with your real identity provider, ensuring the token is saved where `AuthContext` expects it.
+- For production, swap the placeholder login form with your real identity provider, ensuring the token is persisted where `AuthContext` expects it.

@@ -1,6 +1,8 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
+import questionSheet from "@/images/sheet_questions.png";
+import answerSheet from "@/images/sheet_answer.png";
 
 const metrics = [
   { label: "Open Exams", value: 12, tone: "primary" },
@@ -26,9 +28,28 @@ const Dashboard = ({ operationsCount = 0 }) => {
           <h1 className="dash-title">{user?.email || "Examiner Admin"}</h1>
           <p className="dash-subtitle">Overview of your workspace with quick links to the API console.</p>
         </div>
-        <Link to="/api-explorer" className="dash-cta">
-          Open API Console
-        </Link>
+        <div className="dash-header-tools">
+          <div className="dash-downloads">
+            {[
+              { label: "Download Questionsheet", href: questionSheet },
+              { label: "Download Answersheet", href: answerSheet },
+            ].map((item) => (
+              <a
+                key={item.label}
+                className="dash-download-btn"
+                href={item.href}
+                download
+                target="_blank"
+                rel="noreferrer"
+              >
+                {item.label}
+              </a>
+            ))}
+          </div>
+          <Link to="/api-explorer" className="dash-cta">
+            Open API Console
+          </Link>
+        </div>
       </header>
 
       <section className="dash-metrics">

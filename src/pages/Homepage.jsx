@@ -8,6 +8,8 @@ import RecentOrders from "@/components/partials/default/recent-orders/RecentOrde
 import TopProducts from "@/components/partials/default/top-products/TopProducts";
 import DataCard from "@/components/partials/default/DataCard";
 import { DropdownToggle, DropdownMenu, UncontrolledDropdown, DropdownItem } from "reactstrap";
+import questionSheet from "@/images/sheet_questions.png";
+import answerSheet from "@/images/sheet_answer.png";
 import {
   Block,
   BlockHead,
@@ -34,11 +36,29 @@ const Homepage = () => {
       <Content>
         <BlockHead size="sm">
           <BlockBetween>
-            <BlockHeadContent>
-              <BlockTitle page tag="h3">
-                Dashboard
-              </BlockTitle>
-            </BlockHeadContent>
+          <BlockHeadContent>
+            <BlockTitle page tag="h3">
+              Dashboard
+            </BlockTitle>
+          </BlockHeadContent>
+          <BlockHeadContent className="home-download-tools">
+            <div className="home-downloads">
+              {[{ label: "Download Questionsheet", href: questionSheet }, { label: "Download Answersheet", href: answerSheet }].map(
+                (item) => (
+                  <a
+                    key={item.label}
+                    className="home-download-btn btn btn-primary"
+                    href={item.href}
+                    download
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {item.label}
+                  </a>
+                )
+              )}
+            </div>
+          </BlockHeadContent>
             <BlockHeadContent>
               <div className="toggle-wrap nk-block-tools-toggle">
                 <Button
