@@ -45,32 +45,35 @@ const User = () => {
             </div>
           </div>
         </div>
-        <div className="dropdown-inner">
-          <LinkList>
-            <LinkItem link="/user-profile-regular" icon="user-alt" onClick={toggle}>
-              View Profile
-            </LinkItem>
-            <LinkItem link="/user-profile-setting" icon="setting-alt" onClick={toggle}>
-              Account Setting
-            </LinkItem>
-            <LinkItem link="/user-profile-activity" icon="activity-alt" onClick={toggle}>
-              Login Activity
-            </LinkItem>
-            <li>
-              <a className={`dark-switch ${theme.skin === 'dark' ? 'active' : ''}`} href="#" 
-              onClick={(ev) => {
-                ev.preventDefault();
-                themeUpdate.skin(theme.skin === 'dark' ? 'light' : 'dark');
-              }}>
-                {theme.skin === 'dark' ? 
-                  <><em className="icon ni ni-sun"></em><span>Light Mode</span></> 
-                  : 
-                  <><em className="icon ni ni-moon"></em><span>Dark Mode</span></>
-                }
-              </a>
-            </li>
-          </LinkList>
-        </div>
+          <div className="dropdown-inner">
+            <LinkList>
+              <LinkItem link="/user-profile-regular" icon="user-alt" onClick={toggle}>
+                View Profile
+              </LinkItem>
+              <li>
+                <a
+                  className={`dark-switch ${theme.skin === "dark" ? "active" : ""}`}
+                  href="#"
+                  onClick={(ev) => {
+                    ev.preventDefault();
+                    themeUpdate.skin(theme.skin === "dark" ? "light" : "dark");
+                  }}
+                >
+                  {theme.skin === "dark" ? (
+                    <>
+                      <em className="icon ni ni-sun"></em>
+                      <span>Light Mode</span>
+                    </>
+                  ) : (
+                    <>
+                      <em className="icon ni ni-moon"></em>
+                      <span>Dark Mode</span>
+                    </>
+                  )}
+                </a>
+              </li>
+            </LinkList>
+          </div>
         <div className="dropdown-inner">
           <LinkList>
             <li>

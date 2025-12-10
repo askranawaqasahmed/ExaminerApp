@@ -17,32 +17,43 @@ import { createApiClient } from "@/utils/apiClient";
 import { useAuth } from "@/context/AuthContext";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "https://examiner.ideageek.pk";
+const blankForm = {
+  name: "",
+  subject: "",
+  schoolId: "",
+  classId: "",
+  totalMarks: "",
+  questionCount: "",
+  examDate: "",
+};
 
-const blankForm = { name: "", section: "", schoolId: "" };
-
-const ClassList = () => {
+const ExamList = () => {
   const { token } = useAuth();
-  const client = useMemo(() => createApiClient({ baseUrl: API_BASE, getToken: () => token }), [token]);
+  const client = useMemo(
+    () => createApiClient({ baseUrl: API_BASE, getToken: () => token }),
+    [token]
+  );
 
   const [items, setItems] = useState([]);
+  const [classes, setClasses] = useState([]);
+  const [schools, setSchools] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
   const [form, setForm] = useState(blankForm);
   const [editingId, setEditingId] = useState(null);
-  const [message, setMessage] = useState("");
   const [showDrawer, setShowDrawer] = useState(false);
-  const [schools, setSchools] = useState([]);
 
-  const loadClasses = async () => {
+  const loadExams = async () => {
     setLoading(true);
     setError("");
     try {
-      const res = await client({ path: "/api/classes", method: "GET" });
-      if (!res.ok) throw new Error(res?.data?.message || "Unable to fetch classes");
+      const res = await client({ path: "/api/exams", method: "GET" });
+      if (!res.ok) throw new Error(res?.data?.message || "Unable to fetch exams");
       setItems(Array.isArray(res.data) ? res.data : res.data?.data || []);
     } catch (err) {
-      setError(err.message || "Failed to load classes.");
+      setError(err.message || "Failed to load exams.");
     } finally {
       setLoading(false);
     }
@@ -55,13 +66,25 @@ const ClassList = () => {
       const data = Array.isArray(res.data) ? res.data : res.data?.data || [];
       setSchools(data);
     } catch (err) {
-      // silently ignore for UI; dropdown will show empty state
+      // ignore
+    }
+  };
+
+  const loadClasses = async () => {
+    try {
+      const res = await client({ path: "/api/classes", method: "GET" });
+      if (!res.ok) throw new Error(res?.data?.message || "Unable to fetch classes");
+      const data = Array.isArray(res.data) ? res.data : res.data?.data || [];
+      setClasses(data);
+    } catch (err) {
+      // ignore
     }
   };
 
   useEffect(() => {
-    loadClasses();
+    loadExams();
     loadSchools();
+    loadClasses();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSubmit = async (e) => {
@@ -72,16 +95,20 @@ const ClassList = () => {
     try {
       const payload = {
         name: form.name,
-        section: form.section || null,
+        subject: form.subject || null,
         schoolId: form.schoolId || null,
+        classId: form.classId || null,
+        totalMarks: form.totalMarks ? Number(form.totalMarks) : null,
+        questionCount: form.questionCount ? Number(form.questionCount) : null,
+        examDate: form.examDate || null,
       };
-      const path = editingId ? `/api/classes/${editingId}/update` : "/api/classes";
+      const path = editingId ? `/api/exams/${editingId}/update` : "/api/exams";
       const res = await client({ path, method: "POST", body: payload });
       if (!res.ok) throw new Error(res?.data?.message || "Save failed");
-      setMessage(editingId ? "Class updated." : "Class created.");
+      setMessage(editingId ? "Exam updated." : "Exam created.");
       setForm(blankForm);
       setEditingId(null);
-      loadClasses();
+      loadExams();
       setShowDrawer(false);
     } catch (err) {
       setError(err.message || "Save failed.");
@@ -91,42 +118,53 @@ const ClassList = () => {
   };
 
   const handleEdit = (item) => {
-    setEditingId(item.id || item.classId || item._id);
+    setEditingId(item.id || item.examId || item._id);
     setForm({
       name: item.name || "",
-      section: item.section ?? item.description ?? "",
+      subject: item.subject || "",
       schoolId: item.schoolId || item.schoolID || "",
+      classId: item.classId || "",
+      totalMarks: item.totalMarks?.toString() || "",
+      questionCount: item.questionCount?.toString() || "",
+      examDate: item.examDate ? item.examDate.split("T")[0] : "",
     });
     setShowDrawer(true);
   };
 
   const handleDelete = async (id) => {
     if (!id) return;
-    const confirmed = window.confirm("Delete this class?");
+    const confirmed = window.confirm("Delete this exam?");
     if (!confirmed) return;
     setError("");
     setMessage("");
     try {
-      const res = await client({ path: `/api/classes/${id}/delete`, method: "POST" });
+      const res = await client({ path: `/api/exams/${id}/delete`, method: "POST" });
       if (!res.ok) throw new Error(res?.data?.message || "Delete failed");
-      setMessage("Class deleted.");
-      setItems((prev) => prev.filter((it) => (it.id || it.classId || it._id) !== id));
+      setMessage("Exam deleted.");
+      setItems((prev) => prev.filter((it) => (it.id || it.examId || it._id) !== id));
     } catch (err) {
       setError(err.message || "Delete failed.");
     }
   };
 
+  const availableClasses = useMemo(() => {
+    if (!form.schoolId) return classes;
+    return classes.filter(
+      (cls) => (cls.schoolId || cls.schoolID || cls.school?.id) === form.schoolId
+    );
+  }, [classes, form.schoolId]);
+
   return (
     <React.Fragment>
-      <Head title="Classes" />
+      <Head title="Exams" />
       <Content>
         <BlockHead size="sm">
           <BlockBetween className="g-3">
             <BlockHeadContent>
               <BlockTitle page tag="h3">
-                Classes
+                Exams
               </BlockTitle>
-              <div className="text-soft">Browse classes and manage them via the slider form.</div>
+              <div className="text-soft">Create, edit, and remove exams.</div>
             </BlockHeadContent>
             <BlockHeadContent className="nk-block-tools-opt">
               <Button
@@ -138,7 +176,7 @@ const ClassList = () => {
                 }}
               >
                 <Icon name="plus" />
-                <span>New Class</span>
+                <span>New Exam</span>
               </Button>
             </BlockHeadContent>
           </BlockBetween>
@@ -151,11 +189,11 @@ const ClassList = () => {
                 <div className="card-inner">
                   <div className="card-title-group align-start mb-2">
                     <div className="card-title">
-                      <h6 className="title">Class List</h6>
+                      <h6 className="title">Exam List</h6>
                       <p className="text-soft small">CRUD powered by Examiner API.</p>
                     </div>
                     <div className="card-tools">
-                      <Button color="light" outline className="btn-icon" onClick={loadClasses} disabled={loading}>
+                      <Button color="light" outline className="btn-icon" onClick={loadExams} disabled={loading}>
                         <Icon name="reload" />
                       </Button>
                     </div>
@@ -165,38 +203,47 @@ const ClassList = () => {
                       <thead className="table-light">
                         <tr>
                           <th>Name</th>
-                          <th>School</th>
-                          <th>Section</th>
+                          <th>Subject</th>
+                          <th>Class</th>
+                          <th>Date</th>
+                          <th>Total Marks</th>
+                          <th>Questions</th>
                           <th className="text-end">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
                         {loading && (
                           <tr>
-                            <td colSpan="4">Loading...</td>
+                            <td colSpan="7">Loading...</td>
                           </tr>
                         )}
                         {!loading && items.length === 0 && (
                           <tr>
-                            <td colSpan="4">No classes found.</td>
+                            <td colSpan="7">No exams found.</td>
                           </tr>
                         )}
                         {!loading &&
                           items.map((item) => {
-                            const id = item.id || item.classId || item._id;
+                            const id = item.id || item.examId || item._id;
                             const schoolLabel =
                               item.schoolName ||
                               item.school?.name ||
                               item.schoolId ||
                               item.schoolID ||
                               "Unknown school";
+                            const classLabel = item.className || `Class ${item.classId || item.classID || "—"}`;
+                            const dateLabel = item.examDate ? new Date(item.examDate).toLocaleDateString() : "—";
                             return (
                               <tr key={id}>
                                 <td>
                                   <div className="lead-text mb-1">{item.name || "—"}</div>
+                                  <span className="sub-text text-soft">{schoolLabel}</span>
                                 </td>
-                                <td>{schoolLabel}</td>
-                                <td>{item.section || "—"}</td>
+                                <td>{item.subject || "—"}</td>
+                                <td>{classLabel}</td>
+                                <td>{dateLabel}</td>
+                                <td>{item.totalMarks ?? "—"}</td>
+                                <td>{item.questionCount ?? "—"}</td>
                                 <td className="text-end">
                                   <Button size="sm" color="light" className="me-1" onClick={() => handleEdit(item)}>
                                     <Icon name="edit" />
@@ -224,7 +271,7 @@ const ClassList = () => {
         >
           <BlockHead>
             <BlockHeadContent>
-              <BlockTitle tag="h5">{editingId ? "Edit Class" : "New Class"}</BlockTitle>
+              <BlockTitle tag="h5">{editingId ? "Edit Exam" : "New Exam"}</BlockTitle>
               <div className="text-soft small">Fill required fields and save.</div>
             </BlockHeadContent>
           </BlockHead>
@@ -243,14 +290,13 @@ const ClassList = () => {
                 </div>
               </div>
               <div className="form-group">
-                <label className="form-label">Section</label>
+                <label className="form-label">Subject</label>
                 <div className="form-control-wrap">
                   <input
                     type="text"
                     className="form-control"
-                    value={form.section}
-                    onChange={(e) => setForm((f) => ({ ...f, section: e.target.value }))}
-                    placeholder="Optional"
+                    value={form.subject}
+                    onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))}
                   />
                 </div>
               </div>
@@ -260,7 +306,13 @@ const ClassList = () => {
                   <select
                     className="form-control"
                     value={form.schoolId}
-                    onChange={(e) => setForm((f) => ({ ...f, schoolId: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        schoolId: e.target.value,
+                        classId: "",
+                      }))
+                    }
                   >
                     <option value="">Select school</option>
                     {schools.map((school) => {
@@ -274,11 +326,64 @@ const ClassList = () => {
                   </select>
                 </div>
               </div>
+              <div className="form-group">
+                <label className="form-label">Class</label>
+                <div className="form-control-wrap">
+                  <select
+                    className="form-control"
+                    value={form.classId}
+                    onChange={(e) => setForm((f) => ({ ...f, classId: e.target.value }))}
+                  >
+                    <option value="">Select class</option>
+                    {availableClasses.map((cls) => {
+                      const val = cls.id || cls.classId || cls._id;
+                      return (
+                        <option key={val} value={val}>
+                          {cls.name || `Class ${val}`}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+              </div>
+              <div className="form-group">
+                <div className="row gx-2">
+                  <div className="col">
+                    <label className="form-label">Total Marks</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      value={form.totalMarks}
+                      onChange={(e) => setForm((f) => ({ ...f, totalMarks: e.target.value }))}
+                    />
+                  </div>
+                  <div className="col">
+                    <label className="form-label">Question Count</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      value={form.questionCount}
+                      onChange={(e) => setForm((f) => ({ ...f, questionCount: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Exam Date</label>
+                <div className="form-control-wrap">
+                  <input
+                    type="date"
+                    className="form-control"
+                    value={form.examDate}
+                    onChange={(e) => setForm((f) => ({ ...f, examDate: e.target.value }))}
+                  />
+                </div>
+              </div>
               {error && <div className="alert alert-danger">{error}</div>}
               {message && <div className="alert alert-success">{message}</div>}
               <div className="form-group">
                 <Button color="primary" type="submit" disabled={saving}>
-                  {saving ? "Saving..." : editingId ? "Update Class" : "Create Class"}
+                  {saving ? "Saving..." : editingId ? "Update Exam" : "Create Exam"}
                 </Button>
                 <Button
                   type="button"
@@ -302,4 +407,4 @@ const ClassList = () => {
   );
 };
 
-export default ClassList;
+export default ExamList;

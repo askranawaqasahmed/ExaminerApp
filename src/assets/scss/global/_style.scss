@@ -21,3 +21,21 @@
 @import "wgs/analytic";
 @import "wgs/ecommerce";
 @import "wgs/db-invest";
+
+.student-form-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  background: #fff;
+  padding: 0.75rem 0.5rem;
+  margin-top: 1rem;
+  border-top: 1px solid #ecedef;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.student-form-actions {
+  display: flex;
+  gap: 0.75rem;
+}

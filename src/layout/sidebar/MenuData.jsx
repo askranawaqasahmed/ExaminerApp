@@ -1,4 +1,4 @@
-const swaggerModules = ["Auth", "Class", "Exam", "Question", "School", "Student"];
+const swaggerModules = ["Class", "Exam", "Question", "School", "Student"];
 
 const menu = [
   {
@@ -6,19 +6,22 @@ const menu = [
     text: "Dashboard",
     link: "/dashboard",
   },
-  {
-    heading: "Swagger Modules",
-  },
   ...swaggerModules.map((name) => ({
     icon: "layers-fill",
     text: name,
-    link: name === "Class" ? "/classes" : `/api-explorer/${encodeURIComponent(name)}`,
+    link:
+      name === "Class"
+        ? "/classes"
+        : name === "Exam"
+        ? "/exams"
+        : name === "Question"
+        ? "/questions"
+        : name === "Student"
+        ? "/students"
+        : name === "School"
+        ? "/schools"
+        : `/api-explorer/${encodeURIComponent(name)}`,
   })),
-  {
-    icon: "server-fill",
-    text: "All Operations",
-    link: "/api-explorer",
-  },
 ];
 
 const ecommerceMenu = menu;

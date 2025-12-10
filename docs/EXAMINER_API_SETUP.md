@@ -20,7 +20,7 @@
 ## Class CRUD Experience
 - `src/pages/classes/ClassList.jsx` lists classes and supports create/edit/delete via the Examiner API (uses the shared API client).
 - A slider drawer (same pattern as `nk-add-product`) contains the form (name, description, school dropdown). The dropdown is populated from `GET /api/schools`.
-- Creating/editing triggers POST/PUT, deleting calls DELETE, and success/error messages are shown inline.
+- Creating now posts to `/api/classes`, editing calls `/api/classes/{id}/update`, deleting goes through `/api/classes/{id}/delete`, and success/error messages are shown inline.
 - “New Class” opens the drawer; edit buttons preload the form.
 
 ## Notes

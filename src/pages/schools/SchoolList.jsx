@@ -17,10 +17,9 @@ import { createApiClient } from "@/utils/apiClient";
 import { useAuth } from "@/context/AuthContext";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "https://examiner.ideageek.pk";
+const blankForm = { name: "", code: "", address: "" };
 
-const blankForm = { name: "", section: "", schoolId: "" };
-
-const ClassList = () => {
+const SchoolList = () => {
   const { token } = useAuth();
   const client = useMemo(() => createApiClient({ baseUrl: API_BASE, getToken: () => token }), [token]);
 
@@ -28,39 +27,26 @@ const ClassList = () => {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
   const [form, setForm] = useState(blankForm);
   const [editingId, setEditingId] = useState(null);
-  const [message, setMessage] = useState("");
   const [showDrawer, setShowDrawer] = useState(false);
-  const [schools, setSchools] = useState([]);
 
-  const loadClasses = async () => {
+  const loadSchools = async () => {
     setLoading(true);
     setError("");
     try {
-      const res = await client({ path: "/api/classes", method: "GET" });
-      if (!res.ok) throw new Error(res?.data?.message || "Unable to fetch classes");
+      const res = await client({ path: "/api/schools", method: "GET" });
+      if (!res.ok) throw new Error(res?.data?.message || "Unable to fetch schools");
       setItems(Array.isArray(res.data) ? res.data : res.data?.data || []);
     } catch (err) {
-      setError(err.message || "Failed to load classes.");
+      setError(err.message || "Failed to load schools.");
     } finally {
       setLoading(false);
     }
   };
 
-  const loadSchools = async () => {
-    try {
-      const res = await client({ path: "/api/schools", method: "GET" });
-      if (!res.ok) throw new Error(res?.data?.message || "Unable to fetch schools");
-      const data = Array.isArray(res.data) ? res.data : res.data?.data || [];
-      setSchools(data);
-    } catch (err) {
-      // silently ignore for UI; dropdown will show empty state
-    }
-  };
-
   useEffect(() => {
-    loadClasses();
     loadSchools();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -72,16 +58,16 @@ const ClassList = () => {
     try {
       const payload = {
         name: form.name,
-        section: form.section || null,
-        schoolId: form.schoolId || null,
+        code: form.code || null,
+        address: form.address || null,
       };
-      const path = editingId ? `/api/classes/${editingId}/update` : "/api/classes";
+      const path = editingId ? `/api/schools/${editingId}/update` : "/api/schools";
       const res = await client({ path, method: "POST", body: payload });
       if (!res.ok) throw new Error(res?.data?.message || "Save failed");
-      setMessage(editingId ? "Class updated." : "Class created.");
+      setMessage(editingId ? "School updated." : "School created.");
       setForm(blankForm);
       setEditingId(null);
-      loadClasses();
+      loadSchools();
       setShowDrawer(false);
     } catch (err) {
       setError(err.message || "Save failed.");
@@ -91,26 +77,27 @@ const ClassList = () => {
   };
 
   const handleEdit = (item) => {
-    setEditingId(item.id || item.classId || item._id);
+    const id = item.id || item.schoolId || item._id;
+    setEditingId(id);
     setForm({
       name: item.name || "",
-      section: item.section ?? item.description ?? "",
-      schoolId: item.schoolId || item.schoolID || "",
+      code: item.code || "",
+      address: item.address || "",
     });
     setShowDrawer(true);
   };
 
   const handleDelete = async (id) => {
     if (!id) return;
-    const confirmed = window.confirm("Delete this class?");
+    const confirmed = window.confirm("Delete this school?");
     if (!confirmed) return;
     setError("");
     setMessage("");
     try {
-      const res = await client({ path: `/api/classes/${id}/delete`, method: "POST" });
+      const res = await client({ path: `/api/schools/${id}/delete`, method: "POST" });
       if (!res.ok) throw new Error(res?.data?.message || "Delete failed");
-      setMessage("Class deleted.");
-      setItems((prev) => prev.filter((it) => (it.id || it.classId || it._id) !== id));
+      setMessage("School deleted.");
+      setItems((prev) => prev.filter((it) => (it.id || it.schoolId || it._id) !== id));
     } catch (err) {
       setError(err.message || "Delete failed.");
     }
@@ -118,15 +105,15 @@ const ClassList = () => {
 
   return (
     <React.Fragment>
-      <Head title="Classes" />
+      <Head title="Schools" />
       <Content>
         <BlockHead size="sm">
           <BlockBetween className="g-3">
             <BlockHeadContent>
               <BlockTitle page tag="h3">
-                Classes
+                Schools
               </BlockTitle>
-              <div className="text-soft">Browse classes and manage them via the slider form.</div>
+              <div className="text-soft">Create, edit, and remove schools.</div>
             </BlockHeadContent>
             <BlockHeadContent className="nk-block-tools-opt">
               <Button
@@ -138,7 +125,7 @@ const ClassList = () => {
                 }}
               >
                 <Icon name="plus" />
-                <span>New Class</span>
+                <span>New School</span>
               </Button>
             </BlockHeadContent>
           </BlockBetween>
@@ -151,11 +138,11 @@ const ClassList = () => {
                 <div className="card-inner">
                   <div className="card-title-group align-start mb-2">
                     <div className="card-title">
-                      <h6 className="title">Class List</h6>
+                      <h6 className="title">School List</h6>
                       <p className="text-soft small">CRUD powered by Examiner API.</p>
                     </div>
                     <div className="card-tools">
-                      <Button color="light" outline className="btn-icon" onClick={loadClasses} disabled={loading}>
+                      <Button color="light" outline className="btn-icon" onClick={loadSchools} disabled={loading}>
                         <Icon name="reload" />
                       </Button>
                     </div>
@@ -165,8 +152,8 @@ const ClassList = () => {
                       <thead className="table-light">
                         <tr>
                           <th>Name</th>
-                          <th>School</th>
-                          <th>Section</th>
+                          <th>Code</th>
+                          <th>Address</th>
                           <th className="text-end">Actions</th>
                         </tr>
                       </thead>
@@ -178,25 +165,19 @@ const ClassList = () => {
                         )}
                         {!loading && items.length === 0 && (
                           <tr>
-                            <td colSpan="4">No classes found.</td>
+                            <td colSpan="4">No schools found.</td>
                           </tr>
                         )}
                         {!loading &&
                           items.map((item) => {
-                            const id = item.id || item.classId || item._id;
-                            const schoolLabel =
-                              item.schoolName ||
-                              item.school?.name ||
-                              item.schoolId ||
-                              item.schoolID ||
-                              "Unknown school";
+                            const id = item.id || item.schoolId || item._id;
                             return (
                               <tr key={id}>
                                 <td>
                                   <div className="lead-text mb-1">{item.name || "—"}</div>
                                 </td>
-                                <td>{schoolLabel}</td>
-                                <td>{item.section || "—"}</td>
+                                <td>{item.code || "—"}</td>
+                                <td>{item.address || "—"}</td>
                                 <td className="text-end">
                                   <Button size="sm" color="light" className="me-1" onClick={() => handleEdit(item)}>
                                     <Icon name="edit" />
@@ -224,7 +205,7 @@ const ClassList = () => {
         >
           <BlockHead>
             <BlockHeadContent>
-              <BlockTitle tag="h5">{editingId ? "Edit Class" : "New Class"}</BlockTitle>
+              <BlockTitle tag="h5">{editingId ? "Edit School" : "New School"}</BlockTitle>
               <div className="text-soft small">Fill required fields and save.</div>
             </BlockHeadContent>
           </BlockHead>
@@ -243,42 +224,32 @@ const ClassList = () => {
                 </div>
               </div>
               <div className="form-group">
-                <label className="form-label">Section</label>
+                <label className="form-label">Code</label>
                 <div className="form-control-wrap">
                   <input
                     type="text"
                     className="form-control"
-                    value={form.section}
-                    onChange={(e) => setForm((f) => ({ ...f, section: e.target.value }))}
-                    placeholder="Optional"
+                    value={form.code}
+                    onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
                   />
                 </div>
               </div>
               <div className="form-group">
-                <label className="form-label">School</label>
+                <label className="form-label">Address</label>
                 <div className="form-control-wrap">
-                  <select
+                  <textarea
                     className="form-control"
-                    value={form.schoolId}
-                    onChange={(e) => setForm((f) => ({ ...f, schoolId: e.target.value }))}
-                  >
-                    <option value="">Select school</option>
-                    {schools.map((school) => {
-                      const val = school.id || school.schoolId || school._id;
-                      return (
-                        <option key={val} value={val}>
-                          {school.name || `School ${val}`}
-                        </option>
-                      );
-                    })}
-                  </select>
+                    rows={3}
+                    value={form.address}
+                    onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
+                  />
                 </div>
               </div>
               {error && <div className="alert alert-danger">{error}</div>}
               {message && <div className="alert alert-success">{message}</div>}
               <div className="form-group">
                 <Button color="primary" type="submit" disabled={saving}>
-                  {saving ? "Saving..." : editingId ? "Update Class" : "Create Class"}
+                  {saving ? "Saving..." : editingId ? "Update School" : "Create School"}
                 </Button>
                 <Button
                   type="button"
@@ -302,4 +273,4 @@ const ClassList = () => {
   );
 };
 
-export default ClassList;
+export default SchoolList;
