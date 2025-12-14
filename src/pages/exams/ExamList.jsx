@@ -13,6 +13,7 @@ import {
   Col,
 } from "@/components/Component";
 import SimpleBar from "simplebar-react";
+import { Modal, ModalBody, ModalHeader } from "reactstrap";
 import { createApiClient } from "@/utils/apiClient";
 import { useAuth } from "@/context/AuthContext";
 
@@ -44,6 +45,15 @@ const ExamList = () => {
   const [form, setForm] = useState(blankForm);
   const [editingId, setEditingId] = useState(null);
   const [showDrawer, setShowDrawer] = useState(false);
+  const [sheetLoading, setSheetLoading] = useState({});
+  const [scoreModalOpen, setScoreModalOpen] = useState(false);
+  const [scoreExamId, setScoreExamId] = useState(null);
+  const [scoreFile, setScoreFile] = useState(null);
+  const [scoreResult, setScoreResult] = useState(null);
+  const [scoreError, setScoreError] = useState("");
+  const [scoreLoading, setScoreLoading] = useState(false);
+  const [students, setStudents] = useState([]);
+  const [scoreStudentId, setScoreStudentId] = useState("");
 
   const loadExams = async () => {
     setLoading(true);
@@ -81,10 +91,22 @@ const ExamList = () => {
     }
   };
 
+  const loadStudents = async () => {
+    try {
+      const res = await client({ path: "/api/students", method: "GET" });
+      if (!res.ok) throw new Error(res?.data?.message || "Unable to fetch students");
+      const data = Array.isArray(res.data) ? res.data : res.data?.data || [];
+      setStudents(data);
+    } catch (err) {
+      // ignore; dropdown will stay empty
+    }
+  };
+
   useEffect(() => {
     loadExams();
     loadSchools();
     loadClasses();
+    loadStudents();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSubmit = async (e) => {
@@ -154,6 +176,145 @@ const ExamList = () => {
     );
   }, [classes, form.schoolId]);
 
+  const toAbsoluteUrl = (fileUrl = "") => {
+    if (!fileUrl) return "";
+    if (/^https?:\/\//i.test(fileUrl)) return fileUrl;
+    const base = API_BASE.replace(/\/+$/, "");
+    const path = fileUrl.replace(/^\/+/, "");
+    return `${base}/${path}`;
+  };
+
+  const isSameOrigin = (targetUrl = "") => {
+    try {
+      const currentOrigin = window.location.origin;
+      const apiOrigin = API_BASE ? new URL(API_BASE).origin : currentOrigin;
+      const targetOrigin = new URL(targetUrl).origin;
+      return targetOrigin === currentOrigin || targetOrigin === apiOrigin;
+    } catch (err) {
+      return false;
+    }
+  };
+
+  const downloadFile = async (fileUrl, fileName = "exam-sheet.png") => {
+    const absoluteUrl = toAbsoluteUrl(fileUrl);
+    // If cross-origin without CORS, open in new tab so the browser handles download.
+    if (!isSameOrigin(absoluteUrl)) {
+      const link = document.createElement("a");
+      link.href = absoluteUrl;
+      link.target = "_blank";
+      link.rel = "noreferrer";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      return;
+    }
+
+    const response = await fetch(absoluteUrl, {
+      headers: token
+        ? {
+            Authorization: `Bearer ${token}`,
+          }
+        : undefined,
+    });
+    if (!response.ok) {
+      throw new Error("Unable to download file.");
+    }
+    const blob = await response.blob();
+    const href = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = href;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(href);
+  };
+
+  const handleGenerateSheet = async (examId, kind) => {
+    if (!examId) return;
+    const key = `${examId}-${kind}`;
+    setSheetLoading((prev) => ({ ...prev, [key]: true }));
+    setError("");
+    setMessage("");
+    try {
+      const path =
+        kind === "question"
+          ? `/api/question-sheets/generate-question-sheet/${examId}`
+          : `/api/question-sheets/generate-answer-sheet/${examId}`;
+      const res = await client({ path, method: "GET" });
+      if (!res.ok) throw new Error(res?.data?.message || "Unable to generate sheet.");
+      const fileUrl = toAbsoluteUrl(res.data?.url || res.data?.filePath || res.data?.path);
+      const fileNameFromUrl = (() => {
+        try {
+          const parsed = new URL(fileUrl);
+          const candidate = parsed.pathname.split("/").filter(Boolean).pop();
+          return candidate || null;
+        } catch (_) {
+          const fallback = fileUrl.split("/").filter(Boolean).pop();
+          return fallback || null;
+        }
+      })();
+      const fileName = fileNameFromUrl || `${kind}-sheet-${examId}.png`;
+      if (!fileUrl) throw new Error("File URL missing from API response.");
+      await downloadFile(fileUrl, fileName);
+      setMessage(`${kind === "question" ? "Question" : "Answer"} sheet downloaded.`);
+    } catch (err) {
+      setError(err.message || "Download failed.");
+    } finally {
+      setSheetLoading((prev) => ({ ...prev, [key]: false }));
+    }
+  };
+
+  const openScoreModal = (examId) => {
+    setScoreExamId(examId);
+    setScoreFile(null);
+    setScoreResult(null);
+    setScoreError("");
+    setScoreStudentId("");
+    setScoreModalOpen(true);
+  };
+
+  const closeScoreModal = () => {
+    setScoreModalOpen(false);
+    setScoreExamId(null);
+    setScoreFile(null);
+    setScoreResult(null);
+    setScoreError("");
+    setScoreLoading(false);
+  };
+
+  const handleCalculateScore = async (e) => {
+    e.preventDefault();
+    if (!scoreExamId) return;
+    if (!scoreFile) {
+      setScoreError("Please upload the answer file first.");
+      return;
+    }
+    if (!scoreStudentId) {
+      setScoreError("Please choose a student.");
+      return;
+    }
+    setScoreError("");
+    setScoreResult(null);
+    setScoreLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append("answerSheet", scoreFile);
+      formData.append("studentId", scoreStudentId);
+      const res = await client({
+        path: `/api/question-sheets/${scoreExamId}/calculate-score`,
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) throw new Error(res?.data?.message || "Unable to calculate score.");
+      setScoreResult(res.data);
+    } catch (err) {
+      setScoreError(err.message || "Calculate score failed.");
+    } finally {
+      setScoreLoading(false);
+    }
+  };
+
   return (
     <React.Fragment>
       <Head title="Exams" />
@@ -198,6 +359,11 @@ const ExamList = () => {
                       </Button>
                     </div>
                   </div>
+                  {(error || message) && (
+                    <div className={`alert alert-${error ? "danger" : "success"} mb-3`}>
+                      {error || message}
+                    </div>
+                  )}
                   <div className="table-responsive">
                     <table className="table table-middle table-tranx">
                       <thead className="table-light">
@@ -245,12 +411,43 @@ const ExamList = () => {
                                 <td>{item.totalMarks ?? "—"}</td>
                                 <td>{item.questionCount ?? "—"}</td>
                                 <td className="text-end">
-                                  <Button size="sm" color="light" className="me-1" onClick={() => handleEdit(item)}>
-                                    <Icon name="edit" />
-                                  </Button>
-                                  <Button size="sm" color="danger" outline onClick={() => handleDelete(id)}>
-                                    <Icon name="trash" />
-                                  </Button>
+                                  <div className="d-flex flex-wrap justify-content-end">
+                                    <Button
+                                      size="sm"
+                                      color="success"
+                                      outline
+                                      className="me-1 mb-1"
+                                      disabled={sheetLoading[`${id}-question`]}
+                                      onClick={() => handleGenerateSheet(id, "question")}
+                                    >
+                                      {sheetLoading[`${id}-question`] ? "Preparing..." : "Question Sheet"}
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      color="info"
+                                      outline
+                                      className="me-1 mb-1"
+                                      disabled={sheetLoading[`${id}-answer`]}
+                                      onClick={() => handleGenerateSheet(id, "answer")}
+                                    >
+                                      {sheetLoading[`${id}-answer`] ? "Preparing..." : "Answer Sheet"}
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      color="warning"
+                                      outline
+                                      className="me-1 mb-1"
+                                      onClick={() => openScoreModal(id)}
+                                    >
+                                      Calculate Score
+                                    </Button>
+                                    <Button size="sm" color="light" className="me-1 mb-1" onClick={() => handleEdit(item)}>
+                                      <Icon name="edit" />
+                                    </Button>
+                                    <Button size="sm" color="danger" outline onClick={() => handleDelete(id)}>
+                                      <Icon name="trash" />
+                                    </Button>
+                                  </div>
                                 </td>
                               </tr>
                             );
@@ -402,6 +599,128 @@ const ExamList = () => {
           </Block>
         </SimpleBar>
         {showDrawer && <div className="toggle-overlay" onClick={() => setShowDrawer(false)}></div>}
+
+        <Modal isOpen={scoreModalOpen} toggle={closeScoreModal} className="modal-dialog-centered" size="lg">
+          <ModalHeader toggle={closeScoreModal}>Calculate Score</ModalHeader>
+          <ModalBody>
+            <form onSubmit={handleCalculateScore}>
+              <div className="form-group">
+                <label className="form-label">Student</label>
+                <div className="form-control-wrap">
+                  <select
+                    className="form-control"
+                    value={scoreStudentId}
+                    onChange={(e) => setScoreStudentId(e.target.value)}
+                    required
+                  >
+                    <option value="">Select student</option>
+                    {students.map((student) => {
+                      const val = student.id || student.studentId || student._id;
+                      return (
+                        <option key={val} value={val}>
+                          {student.name || student.fullName || student.username || `Student ${val}`}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Upload Answer Sheet</label>
+                <div className="form-control-wrap">
+                  <input
+                    type="file"
+                    className="form-control"
+                    accept=".png,.jpg,.jpeg,.pdf,.json,.csv"
+                    onChange={(e) => setScoreFile(e.target.files?.[0] || null)}
+                  />
+                </div>
+              </div>
+              {scoreError && <div className="alert alert-danger">{scoreError}</div>}
+              {scoreResult && (
+                <div className="mt-3">
+                  <div className="alert alert-success">
+                    <div className="fw-bold mb-2">Score Summary</div>
+                    <table className="table table-sm mb-0">
+                      <tbody>
+                        <tr>
+                          <th>Exam</th>
+                          <td>{scoreResult.examName || scoreResult.examId || "—"}</td>
+                        </tr>
+                        <tr>
+                          <th>Student</th>
+                          <td>{scoreResult.studentId || "—"}</td>
+                        </tr>
+                        <tr>
+                          <th>Total Questions</th>
+                          <td>{scoreResult.questionCount ?? "—"}</td>
+                        </tr>
+                        <tr>
+                          <th>Correct</th>
+                          <td>{scoreResult.correctCount ?? "—"}</td>
+                        </tr>
+                        <tr>
+                          <th>Wrong</th>
+                          <td>{scoreResult.wrongCount ?? "—"}</td>
+                        </tr>
+                        {scoreResult.evaluationError && (
+                          <tr>
+                            <th>Note</th>
+                            <td className="text-danger">{scoreResult.evaluationError}</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="mt-3">
+                    <div className="fw-bold mb-2">Question Breakdown</div>
+                    {Array.isArray(scoreResult.details) && scoreResult.details.length > 0 ? (
+                      <div className="table-responsive">
+                        <table className="table table-bordered table-sm align-middle">
+                          <thead className="table-light">
+                            <tr>
+                              <th>Question #</th>
+                              <th>Selected</th>
+                              <th>Correct</th>
+                              <th>Result</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {scoreResult.details.map((detail, idx) => {
+                              const questionNumber = detail.questionNumber ?? idx + 1;
+                              const statusLabel = detail.isCorrect ? "Correct" : "Wrong";
+                              const badgeClass = detail.isCorrect ? "badge badge-success" : "badge badge-danger";
+                              return (
+                                <tr key={`${questionNumber}-${idx}`}>
+                                  <td>{questionNumber}</td>
+                                  <td>{detail.selectedOption || "—"}</td>
+                                  <td>{detail.correctOption || "—"}</td>
+                                  <td>
+                                    <span className={badgeClass}>{statusLabel}</span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="text-soft">No breakdown available.</div>
+                    )}
+                  </div>
+                </div>
+              )}
+              <div className="form-group d-flex justify-content-end">
+                <Button color="light" className="me-2" type="button" onClick={closeScoreModal}>
+                  Cancel
+                </Button>
+                <Button color="primary" type="submit" disabled={scoreLoading}>
+                  {scoreLoading ? "Calculating..." : "Calculate"}
+                </Button>
+              </div>
+            </form>
+          </ModalBody>
+        </Modal>
       </Content>
     </React.Fragment>
   );
