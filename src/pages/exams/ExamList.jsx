@@ -16,6 +16,8 @@ import SimpleBar from "simplebar-react";
 import { Modal, ModalBody, ModalHeader } from "reactstrap";
 import { createApiClient } from "@/utils/apiClient";
 import { useAuth } from "@/context/AuthContext";
+import questionSheet from "@/images/sheet_questions.png";
+import answerSheet from "@/images/sheet_answer.png";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "https://examiner.ideageek.pk";
 const blankForm = {
@@ -45,7 +47,6 @@ const ExamList = () => {
   const [form, setForm] = useState(blankForm);
   const [editingId, setEditingId] = useState(null);
   const [showDrawer, setShowDrawer] = useState(false);
-  const [sheetLoading, setSheetLoading] = useState({});
   const [scoreModalOpen, setScoreModalOpen] = useState(false);
   const [scoreExamId, setScoreExamId] = useState(null);
   const [scoreFile, setScoreFile] = useState(null);
@@ -176,95 +177,6 @@ const ExamList = () => {
     );
   }, [classes, form.schoolId]);
 
-  const toAbsoluteUrl = (fileUrl = "") => {
-    if (!fileUrl) return "";
-    if (/^https?:\/\//i.test(fileUrl)) return fileUrl;
-    const base = API_BASE.replace(/\/+$/, "");
-    const path = fileUrl.replace(/^\/+/, "");
-    return `${base}/${path}`;
-  };
-
-  const isSameOrigin = (targetUrl = "") => {
-    try {
-      const currentOrigin = window.location.origin;
-      const apiOrigin = API_BASE ? new URL(API_BASE).origin : currentOrigin;
-      const targetOrigin = new URL(targetUrl).origin;
-      return targetOrigin === currentOrigin || targetOrigin === apiOrigin;
-    } catch (err) {
-      return false;
-    }
-  };
-
-  const downloadFile = async (fileUrl, fileName = "exam-sheet.png") => {
-    const absoluteUrl = toAbsoluteUrl(fileUrl);
-    // If cross-origin without CORS, open in new tab so the browser handles download.
-    if (!isSameOrigin(absoluteUrl)) {
-      const link = document.createElement("a");
-      link.href = absoluteUrl;
-      link.target = "_blank";
-      link.rel = "noreferrer";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      return;
-    }
-
-    const response = await fetch(absoluteUrl, {
-      headers: token
-        ? {
-            Authorization: `Bearer ${token}`,
-          }
-        : undefined,
-    });
-    if (!response.ok) {
-      throw new Error("Unable to download file.");
-    }
-    const blob = await response.blob();
-    const href = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = href;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(href);
-  };
-
-  const handleGenerateSheet = async (examId, kind) => {
-    if (!examId) return;
-    const key = `${examId}-${kind}`;
-    setSheetLoading((prev) => ({ ...prev, [key]: true }));
-    setError("");
-    setMessage("");
-    try {
-      const path =
-        kind === "question"
-          ? `/api/question-sheets/generate-question-sheet/${examId}`
-          : `/api/question-sheets/generate-answer-sheet/${examId}`;
-      const res = await client({ path, method: "GET" });
-      if (!res.ok) throw new Error(res?.data?.message || "Unable to generate sheet.");
-      const fileUrl = toAbsoluteUrl(res.data?.url || res.data?.filePath || res.data?.path);
-      const fileNameFromUrl = (() => {
-        try {
-          const parsed = new URL(fileUrl);
-          const candidate = parsed.pathname.split("/").filter(Boolean).pop();
-          return candidate || null;
-        } catch (_) {
-          const fallback = fileUrl.split("/").filter(Boolean).pop();
-          return fallback || null;
-        }
-      })();
-      const fileName = fileNameFromUrl || `${kind}-sheet-${examId}.png`;
-      if (!fileUrl) throw new Error("File URL missing from API response.");
-      await downloadFile(fileUrl, fileName);
-      setMessage(`${kind === "question" ? "Question" : "Answer"} sheet downloaded.`);
-    } catch (err) {
-      setError(err.message || "Download failed.");
-    } finally {
-      setSheetLoading((prev) => ({ ...prev, [key]: false }));
-    }
-  };
-
   const openScoreModal = (examId) => {
     setScoreExamId(examId);
     setScoreFile(null);
@@ -328,17 +240,39 @@ const ExamList = () => {
               <div className="text-soft">Create, edit, and remove exams.</div>
             </BlockHeadContent>
             <BlockHeadContent className="nk-block-tools-opt">
-              <Button
-                color="primary"
-                onClick={() => {
-                  setForm(blankForm);
-                  setEditingId(null);
-                  setShowDrawer(true);
-                }}
-              >
-                <Icon name="plus" />
-                <span>New Exam</span>
-              </Button>
+              <div className="d-flex flex-wrap align-items-center justify-content-end">
+                <div className="d-flex flex-wrap align-items-center me-2">
+                  <a
+                    className="btn btn-outline-success me-2 mb-1"
+                    href={questionSheet}
+                    download
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Download Question Sheet
+                  </a>
+                  <a
+                    className="btn btn-outline-info mb-1"
+                    href={answerSheet}
+                    download
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Download Answer Sheet
+                  </a>
+                </div>
+                <Button
+                  color="primary"
+                  onClick={() => {
+                    setForm(blankForm);
+                    setEditingId(null);
+                    setShowDrawer(true);
+                  }}
+                >
+                  <Icon name="plus" />
+                  <span>New Exam</span>
+                </Button>
+              </div>
             </BlockHeadContent>
           </BlockBetween>
         </BlockHead>
@@ -412,26 +346,6 @@ const ExamList = () => {
                                 <td>{item.questionCount ?? "—"}</td>
                                 <td className="text-end">
                                   <div className="d-flex flex-wrap justify-content-end">
-                                    <Button
-                                      size="sm"
-                                      color="success"
-                                      outline
-                                      className="me-1 mb-1"
-                                      disabled={sheetLoading[`${id}-question`]}
-                                      onClick={() => handleGenerateSheet(id, "question")}
-                                    >
-                                      {sheetLoading[`${id}-question`] ? "Preparing..." : "Question Sheet"}
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      color="info"
-                                      outline
-                                      className="me-1 mb-1"
-                                      disabled={sheetLoading[`${id}-answer`]}
-                                      onClick={() => handleGenerateSheet(id, "answer")}
-                                    >
-                                      {sheetLoading[`${id}-answer`] ? "Preparing..." : "Answer Sheet"}
-                                    </Button>
                                     <Button
                                       size="sm"
                                       color="warning"
