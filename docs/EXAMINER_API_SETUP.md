@@ -27,14 +27,12 @@
 ## Question CRUD Experience
 - `/api/questions` is managed by `src/pages/questions/QuestionList.jsx`. Questions are filtered by exam (`GET /api/questions/by-exam/{examId}`) and saved via `/api/questions` or `/api/questions/{id}/update`. Deletions hit `/api/questions/{id}/delete`.
 - The table shows question number, text, options, and the correct answer; the drawer captures all four options plus the right option and ties each question to an exam.
+- Saves accept both the legacy `optionA`-`optionD` fields and a structured `options` array: e.g. `[ { option: "A", text: "Choice A", index: 0, isCorrect: true }, ... ]`. The form pre-fills from either shape and derives `correctOption`/`correctAnswer` from any `isCorrect` flag.
 
 ## Exam Sheets & Scoring
-- Exam list (`src/pages/exams/ExamList.jsx`) now includes:
-  - **Question Sheet** → `GET /api/question-sheets/generate-question-sheet/{examId}`.
-  - **Answer Sheet** → `GET /api/question-sheets/generate-answer-sheet/{examId}`.
-  - **Calculate Score** → opens a modal with a student dropdown (students loaded via `GET /api/students`) and a file upload. Submission posts multipart form data to `POST /api/question-sheets/{examId}/calculate-score` with fields `studentId` and `answerSheet` (binary file).
+- Exam list (`src/pages/exams/ExamList.jsx`) includes header buttons to download static sheet templates (`src/images/sheet_questions.png`, `src/images/sheet_answer.png`) plus a per-exam action to calculate scores.
+- **Calculate Score** opens a modal with a student dropdown (students loaded via `GET /api/students`) and a file upload. Submission posts multipart form data to `POST /api/question-sheets/{examId}/calculate-score` with fields `studentId` and `answerSheet` (binary file).
 - Score responses render in a friendly summary table (exam, student, totals, correct/wrong, note) plus a per-question breakdown with clear Correct/Wrong badges—no raw JSON shown.
-- Sheet URLs are normalized against `VITE_API_BASE`. If the returned URL is cross-origin without CORS, the app opens it in a new tab to let the browser download it; same-origin requests use a blob download with auth headers.
 
 ## School & Student CRUD
 - `/schools` (`src/pages/schools/SchoolList.jsx`) uses POST-based create/update/delete calls to `/api/schools`, `/api/schools/{id}/update`, and `/api/schools/{id}/delete`, with name/code/address inputs and the same drawer experience.

@@ -99,6 +99,13 @@ const QuestionList = () => {
     setError("");
     setMessage("");
     try {
+      const optionsArray = ["A", "B", "C", "D"]
+        .map((letter, idx) => {
+          const key = `option${letter}`;
+          const value = form[key];
+          return value ? { option: letter, text: value, index: idx, isCorrect: form.correctOption === letter } : null;
+        })
+        .filter(Boolean);
       const payload = {
         examId: form.examId || selectedExamId || null,
         questionNumber: form.questionNumber ? Number(form.questionNumber) : null,
@@ -107,6 +114,7 @@ const QuestionList = () => {
         optionB: form.optionB,
         optionC: form.optionC,
         optionD: form.optionD,
+        options: optionsArray,
         correctOption: form.correctOption,
       };
       const path = editingId ? `/api/questions/${editingId}/update` : "/api/questions";
@@ -126,16 +134,29 @@ const QuestionList = () => {
 
   const handleEdit = (item) => {
     const examId = item.examId || item.examID || selectedExamId;
+    const optionFromArray = (index) => {
+      if (!Array.isArray(item.options)) return "";
+      const candidate = item.options[index];
+      if (!candidate) return "";
+      return candidate.text || candidate.value || candidate.optionText || candidate.label || candidate.option || "";
+    };
     setEditingId(getId(item));
     setForm({
       examId,
       questionNumber: item.questionNumber?.toString() || "",
       text: item.text || "",
-      optionA: item.optionA || "",
-      optionB: item.optionB || "",
-      optionC: item.optionC || "",
-      optionD: item.optionD || "",
-      correctOption: item.correctOption || "",
+      optionA: item.optionA || optionFromArray(0) || "",
+      optionB: item.optionB || optionFromArray(1) || "",
+      optionC: item.optionC || optionFromArray(2) || "",
+      optionD: item.optionD || optionFromArray(3) || "",
+      correctOption:
+        item.correctOption ||
+        item.correctAnswer ||
+        (Array.isArray(item.options)
+          ? item.options.find((opt) => opt.isCorrect || opt.correct)?.option ||
+            item.options.find((opt) => opt.isCorrect || opt.correct)?.label ||
+            ""
+          : ""),
     });
     setShowDrawer(true);
   };
@@ -265,16 +286,38 @@ const QuestionList = () => {
                           questions.map((item) => {
                             const id = getId(item);
                             const questionNumber = item.questionNumber ?? "—";
-                            const correctOption = item.correctOption || "—";
-                            const options = [
+                            const optionsFromArray = Array.isArray(item.options)
+                              ? item.options
+                                  .map((opt, idx) => {
+                                    const key =
+                                      opt.option ||
+                                      opt.label ||
+                                      opt.key ||
+                                      opt.optionLabel ||
+                                      String.fromCharCode(65 + idx);
+                                    const value =
+                                      opt.text || opt.value || opt.optionText || opt.name || opt.option || "";
+                                    return value ? `${key}: ${value}` : "";
+                                  })
+                                  .filter(Boolean)
+                              : [];
+                            const optionsFallback = [
                               ["A", item.optionA],
                               ["B", item.optionB],
                               ["C", item.optionC],
                               ["D", item.optionD],
                             ]
                               .filter(([, value]) => value)
-                              .map(([key, value]) => `${key}: ${value}`)
-                              .join(" | ");
+                              .map(([key, value]) => `${key}: ${value}`);
+                            const options = [...optionsFromArray, ...optionsFallback].join(" | ");
+                            const correctOption =
+                              item.correctOption ||
+                              item.correctAnswer ||
+                              (Array.isArray(item.options)
+                                ? item.options.find((opt) => opt.isCorrect || opt.correct)?.option ||
+                                  item.options.find((opt) => opt.isCorrect || opt.correct)?.label ||
+                                  ""
+                                : "—");
                             return (
                               <tr key={id}>
                                 <td>
