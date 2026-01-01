@@ -95,6 +95,35 @@
   gap: 1rem;
 }
 
+.question-form .form-group {
+  margin-bottom: 0.55rem;
+}
+
+.question-form .form-label {
+  margin-bottom: 0.25rem;
+}
+
+.question-form {
+  padding-bottom: 5rem; // leave space for fixed footer
+}
+
+.question-form-footer {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  width: 400px;
+  max-width: 100%;
+  z-index: 1022;
+  background: #fff;
+  padding: 0.75rem 1rem;
+  margin-top: 0.5rem;
+  border-top: 1px solid #ecedef;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  box-shadow: 0 -6px 18px rgba(15, 23, 42, 0.08);
+}
+
 @media (max-width: 768px) {
   .dash-header {
     flex-direction: column;

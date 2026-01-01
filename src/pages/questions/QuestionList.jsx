@@ -358,7 +358,7 @@ const QuestionList = () => {
         </Block>
 
         <SimpleBar
-          className={`nk-add-product toggle-slide toggle-slide-right toggle-screen-any ${
+          className={`nk-add-product toggle-slide toggle-slide-right toggle-screen-any question-form-drawer ${
             showDrawer ? "content-active" : ""
           }`}
         >
@@ -369,7 +369,7 @@ const QuestionList = () => {
             </BlockHeadContent>
           </BlockHead>
           <Block>
-            <form className="gy-3" onSubmit={handleSubmit}>
+            <form className="gy-3 question-form" onSubmit={handleSubmit}>
               <div className="form-group">
                 <label className="form-label">Exam</label>
                 <div className="form-control-wrap">
@@ -449,7 +449,7 @@ const QuestionList = () => {
               </div>
               {error && <div className="alert alert-danger">{error}</div>}
               {message && <div className="alert alert-success">{message}</div>}
-              <div className="form-group">
+              <div className="form-group question-form-footer">
                 <Button color="primary" type="submit" disabled={saving}>
                   {saving ? "Saving..." : editingId ? "Update Question" : "Create Question"}
                 </Button>
