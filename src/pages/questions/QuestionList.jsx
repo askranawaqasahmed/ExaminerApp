@@ -17,15 +17,36 @@ import { createApiClient } from "@/utils/apiClient";
 import { useAuth } from "@/context/AuthContext";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "https://examiner.ideageek.pk";
+const QUESTION_TYPES = [
+  { value: 0, label: "MCQ" },
+  { value: 1, label: "Detailed" },
+  { value: 2, label: "Diagram" },
+];
+
 const blankForm = {
   examId: "",
   questionNumber: "",
   text: "",
+  type: "0",
+  marks: "",
+  lines: "",
+  boxSize: "1",
   optionA: "",
   optionB: "",
   optionC: "",
   optionD: "",
+  optionKeyA: "A",
+  optionKeyB: "B",
+  optionKeyC: "C",
+  optionKeyD: "D",
   correctOption: "",
+};
+
+const getTypeLabel = (value) => QUESTION_TYPES.find((t) => t.value === value)?.label || "Unknown";
+const getBoxSizeLabel = (value) => {
+  if (value === 2 || value === "2") return "Full page";
+  if (value === 1 || value === "1") return "Half page";
+  return "Auto";
 };
 
 const QuestionList = () => {
@@ -48,8 +69,8 @@ const QuestionList = () => {
   const loadExams = async () => {
     try {
       const res = await client({ path: "/api/exams", method: "GET" });
-      if (!res.ok) throw new Error(res?.data?.message || "Unable to fetch exams");
-      const data = Array.isArray(res.data) ? res.data : res.data?.data || [];
+      if (!res.success) throw new Error(res.message || "Unable to fetch exams");
+      const data = Array.isArray(res.value) ? res.value : [];
       setExams(data);
       setSelectedExamId((prev) => {
         if (prev) return prev;
@@ -71,8 +92,9 @@ const QuestionList = () => {
     setError("");
     try {
       const res = await client({ path: `/api/questions/by-exam/${targetExamId}`, method: "GET" });
-      if (!res.ok) throw new Error(res?.data?.message || "Unable to fetch questions");
-      setQuestions(Array.isArray(res.data) ? res.data : res.data?.data || []);
+      if (!res.success) throw new Error(res.message || "Unable to fetch questions");
+      const data = Array.isArray(res.value) ? res.value : [];
+      setQuestions(data);
     } catch (err) {
       setError(err.message || "Failed to load questions.");
       setQuestions([]);
@@ -93,35 +115,54 @@ const QuestionList = () => {
     }
   }, [selectedExamId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (Number(form.type) !== 0 && form.correctOption) {
+      setForm((f) => ({ ...f, correctOption: "" }));
+    }
+  }, [form.type, form.correctOption]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
     setError("");
     setMessage("");
     try {
-      const optionsArray = ["A", "B", "C", "D"]
-        .map((letter, idx) => {
-          const key = `option${letter}`;
-          const value = form[key];
-          return value ? { option: letter, text: value, index: idx, isCorrect: form.correctOption === letter } : null;
-        })
-        .filter(Boolean);
+      const questionType = Number(form.type || selectedExam?.type || 0);
+      const isMcqType = questionType === 0;
+      const isDetailedType = questionType === 1;
+      const isDiagramType = questionType === 2;
+      const optionsArray = isMcq
+        ? ["A", "B", "C", "D"]
+            .map((letter, idx) => {
+              const textValue = form[`option${letter}`];
+              const keyValue = form[`optionKey${letter}`] || letter;
+              if (!textValue) return null;
+              return { key: keyValue, text: textValue, order: idx + 1 };
+            })
+            .filter(Boolean)
+        : [];
+
+      const resolvedCorrectOption = isMcqType
+        ? form.correctOption || optionsArray[0]?.key || null
+        : null;
+
       const payload = {
         examId: form.examId || selectedExamId || null,
         questionNumber: form.questionNumber ? Number(form.questionNumber) : null,
         text: form.text,
-        optionA: form.optionA,
-        optionB: form.optionB,
-        optionC: form.optionC,
-        optionD: form.optionD,
+        type: questionType,
+        marks: form.marks ? Number(form.marks) : null,
+        lines: isDetailedType && form.lines ? Number(form.lines) : null,
+        boxSize: isDiagramType && form.boxSize ? Number(form.boxSize) : null,
         options: optionsArray,
-        correctOption: form.correctOption,
+        correctOption: resolvedCorrectOption,
       };
       const path = editingId ? `/api/questions/${editingId}/update` : "/api/questions";
       const res = await client({ path, method: "POST", body: payload });
-      if (!res.ok) throw new Error(res?.data?.message || "Save failed");
+      if (!res.success) throw new Error(res.message || "Save failed");
       setMessage(editingId ? "Question updated." : "Question created.");
-      setForm(blankForm);
+      const defaultType = selectedExam?.type ?? 0;
+      setForm({ ...blankForm, examId: selectedExamId, type: defaultType.toString() });
       setEditingId(null);
       loadQuestions(selectedExamId);
       setShowDrawer(false);
@@ -135,28 +176,37 @@ const QuestionList = () => {
   const handleEdit = (item) => {
     const examId = item.examId || item.examID || selectedExamId;
     const optionFromArray = (index) => {
-      if (!Array.isArray(item.options)) return "";
+      if (!Array.isArray(item.options)) return { key: String.fromCharCode(65 + index), text: "" };
       const candidate = item.options[index];
-      if (!candidate) return "";
-      return candidate.text || candidate.value || candidate.optionText || candidate.label || candidate.option || "";
+      if (!candidate) return { key: String.fromCharCode(65 + index), text: "" };
+      return {
+        key: candidate.key || candidate.option || candidate.label || String.fromCharCode(65 + index),
+        text: candidate.text || candidate.value || candidate.optionText || candidate.name || candidate.option || "",
+      };
     };
+    const resolvedType = Number(item.type ?? selectedExam?.type ?? 0);
+    const option1 = optionFromArray(0);
+    const option2 = optionFromArray(1);
+    const option3 = optionFromArray(2);
+    const option4 = optionFromArray(3);
     setEditingId(getId(item));
     setForm({
       examId,
       questionNumber: item.questionNumber?.toString() || "",
       text: item.text || "",
-      optionA: item.optionA || optionFromArray(0) || "",
-      optionB: item.optionB || optionFromArray(1) || "",
-      optionC: item.optionC || optionFromArray(2) || "",
-      optionD: item.optionD || optionFromArray(3) || "",
-      correctOption:
-        item.correctOption ||
-        item.correctAnswer ||
-        (Array.isArray(item.options)
-          ? item.options.find((opt) => opt.isCorrect || opt.correct)?.option ||
-            item.options.find((opt) => opt.isCorrect || opt.correct)?.label ||
-            ""
-          : ""),
+      type: resolvedType.toString(),
+      marks: item.marks?.toString() || "",
+      lines: item.lines?.toString() || "",
+      boxSize: (item.boxSize ?? 1).toString(),
+      optionA: item.optionA || option1.text || "",
+      optionB: item.optionB || option2.text || "",
+      optionC: item.optionC || option3.text || "",
+      optionD: item.optionD || option4.text || "",
+      optionKeyA: option1.key || "A",
+      optionKeyB: option2.key || "B",
+      optionKeyC: option3.key || "C",
+      optionKeyD: option4.key || "D",
+      correctOption: resolvedType === 0 ? item.correctOption || item.correctAnswer || option1.key || "" : "",
     });
     setShowDrawer(true);
   };
@@ -169,7 +219,7 @@ const QuestionList = () => {
     setMessage("");
     try {
       const res = await client({ path: `/api/questions/${id}/delete`, method: "POST" });
-      if (!res.ok) throw new Error(res?.data?.message || "Delete failed");
+      if (!res.success) throw new Error(res.message || "Delete failed");
       setMessage("Question deleted.");
       setQuestions((prev) => prev.filter((it) => getId(it) !== id));
     } catch (err) {
@@ -181,6 +231,33 @@ const QuestionList = () => {
     () => exams.find((exam) => (exam.id || exam.examId || exam._id) === selectedExamId),
     [exams, selectedExamId]
   );
+
+  const availableQuestionTypes = useMemo(() => QUESTION_TYPES, []);
+
+  const mcqOptionKeys = useMemo(() => {
+    if (Number(form.type) !== 0) return [];
+    const entries = [
+      [form.optionKeyA || "A", form.optionA],
+      [form.optionKeyB || "B", form.optionB],
+      [form.optionKeyC || "C", form.optionC],
+      [form.optionKeyD || "D", form.optionD],
+    ];
+    return entries.filter(([, text]) => text).map(([key]) => key);
+  }, [
+    form.type,
+    form.optionKeyA,
+    form.optionKeyB,
+    form.optionKeyC,
+    form.optionKeyD,
+    form.optionA,
+    form.optionB,
+    form.optionC,
+    form.optionD,
+  ]);
+
+  const isMcq = Number(form.type) === 0;
+  const isDetailed = Number(form.type) === 1;
+  const isDiagram = Number(form.type) === 2;
 
   return (
     <React.Fragment>
@@ -200,7 +277,8 @@ const QuestionList = () => {
               <Button
                 color="primary"
                 onClick={() => {
-                  setForm({ ...blankForm, examId: selectedExamId });
+                  const defaultType = selectedExam?.type ?? 0;
+                  setForm({ ...blankForm, examId: selectedExamId, type: defaultType.toString() });
                   setEditingId(null);
                   setShowDrawer(true);
                 }}
@@ -261,39 +339,43 @@ const QuestionList = () => {
                         <tr>
                           <th>Question #</th>
                           <th>Text</th>
-                          <th>Options</th>
+                          <th>Type</th>
+                          <th>Marks / Details</th>
+                          <th>Options / Notes</th>
                           <th>Correct</th>
                           <th className="text-end">Actions</th>
                         </tr>
                       </thead>
-                      <tbody>
+                                            <tbody>
                         {loading && (
                           <tr>
-                            <td colSpan="5">Loading...</td>
+                            <td colSpan="7">Loading...</td>
                           </tr>
                         )}
                         {!loading && !selectedExamId && (
                           <tr>
-                            <td colSpan="5">Choose an exam to load questions.</td>
+                            <td colSpan="7">Choose an exam to load questions.</td>
                           </tr>
                         )}
                         {!loading && selectedExamId && questions.length === 0 && (
                           <tr>
-                            <td colSpan="5">No questions found.</td>
+                            <td colSpan="7">No questions found.</td>
                           </tr>
                         )}
                         {!loading &&
                           questions.map((item) => {
                             const id = getId(item);
-                            const questionNumber = item.questionNumber ?? "—";
+                            const questionNumber = item.questionNumber ?? "-";
+                            const typeValue = Number(item.type ?? 0);
+                            const typeLabel = getTypeLabel(typeValue);
                             const optionsFromArray = Array.isArray(item.options)
                               ? item.options
                                   .map((opt, idx) => {
                                     const key =
+                                      opt.key ||
                                       opt.option ||
                                       opt.label ||
-                                      opt.key ||
-                                      opt.optionLabel ||
+                                      opt.keyLabel ||
                                       String.fromCharCode(65 + idx);
                                     const value =
                                       opt.text || opt.value || opt.optionText || opt.name || opt.option || "";
@@ -302,31 +384,51 @@ const QuestionList = () => {
                                   .filter(Boolean)
                               : [];
                             const optionsFallback = [
-                              ["A", item.optionA],
-                              ["B", item.optionB],
-                              ["C", item.optionC],
-                              ["D", item.optionD],
+                              [item.optionKeyA || "A", item.optionA],
+                              [item.optionKeyB || "B", item.optionB],
+                              [item.optionKeyC || "C", item.optionC],
+                              [item.optionKeyD || "D", item.optionD],
                             ]
                               .filter(([, value]) => value)
                               .map(([key, value]) => `${key}: ${value}`);
                             const options = [...optionsFromArray, ...optionsFallback].join(" | ");
+                            const boxSizeLabel = getBoxSizeLabel(item.boxSize ?? 1);
+                            const marksDetail = [
+                              item.marks !== null && item.marks !== undefined ? `${item.marks} marks` : null,
+                              typeValue !== 0 ? (item.lines ? `${item.lines} lines` : null) : null,
+                              `Box: ${boxSizeLabel}`,
+                            ]
+                              .filter(Boolean)
+                              .join(" | ") || "-";
                             const correctOption =
-                              item.correctOption ||
-                              item.correctAnswer ||
-                              (Array.isArray(item.options)
-                                ? item.options.find((opt) => opt.isCorrect || opt.correct)?.option ||
-                                  item.options.find((opt) => opt.isCorrect || opt.correct)?.label ||
-                                  ""
-                                : "—");
+                              typeValue === 0
+                                ? item.correctOption ||
+                                  item.correctAnswer ||
+                                  (Array.isArray(item.options)
+                                    ? item.options.find((opt) => opt.isCorrect || opt.correct)?.key ||
+                                      item.options.find((opt) => opt.isCorrect || opt.correct)?.option ||
+                                      ""
+                                    : "")
+                                : "N/A";
+                            const optionsNote =
+                              typeValue === 0
+                                ? options || "No options"
+                                : typeValue === 2
+                                ? `Diagram question (${boxSizeLabel})`
+                                : "Detailed question";
                             return (
                               <tr key={id}>
                                 <td>
                                   <div className="lead-text mb-1">{questionNumber}</div>
-                                  <span className="sub-text text-soft">{selectedExam?.name || "—"}</span>
+                                  <span className="sub-text text-soft">{selectedExam?.name || "-"}</span>
                                 </td>
-                                <td>{item.text || "—"}</td>
-                                <td>{options || "—"}</td>
-                                <td>{correctOption}</td>
+                                <td>{item.text || "-"}</td>
+                                <td>
+                                  <span className="badge bg-light text-dark">{typeLabel}</span>
+                                </td>
+                                <td>{marksDetail}</td>
+                                <td>{optionsNote}</td>
+                                <td>{correctOption || "N/A"}</td>
                                 <td className="text-end">
                                   <Button
                                     size="sm"
@@ -415,38 +517,126 @@ const QuestionList = () => {
                   />
                 </div>
               </div>
-              {["optionA", "optionB", "optionC", "optionD"].map((field, index) => (
-                <div className="form-group" key={field}>
-                  <label className="form-label">Option {String.fromCharCode(65 + index)}</label>
-                  <div className="form-control-wrap">
-                    <input
-                      type="text"
-                      className="form-control"
-                      value={form[field]}
-                      onChange={(e) => setForm((f) => ({ ...f, [field]: e.target.value }))}
-                      required
-                    />
-                  </div>
-                </div>
-              ))}
               <div className="form-group">
-                <label className="form-label">Correct Option</label>
+                <label className="form-label">Question Type</label>
                 <div className="form-control-wrap">
                   <select
                     className="form-control"
-                    value={form.correctOption}
-                    onChange={(e) => setForm((f) => ({ ...f, correctOption: e.target.value }))}
-                    required
+                    value={form.type}
+                    onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
                   >
-                    <option value="">Select correct answer</option>
-                    {["A", "B", "C", "D"].map((letter) => (
-                      <option key={letter} value={letter}>
-                        {letter}
+                    {availableQuestionTypes.map((type) => (
+                      <option key={type.value} value={type.value}>
+                        {type.label}
                       </option>
                     ))}
                   </select>
+                  <div className="form-note-alt">
+                    MCQ needs options + correct answer; detailed/diagram skip options.
+                  </div>
                 </div>
               </div>
+
+              <div className="row g-2">
+                <div className="col-md-4">
+                  <div className="form-group">
+                    <label className="form-label">Marks</label>
+                    <div className="form-control-wrap">
+                      <input
+                        type="number"
+                        className="form-control"
+                        min="0"
+                        value={form.marks}
+                        onChange={(e) => setForm((f) => ({ ...f, marks: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                </div>
+                {isDetailed && (
+                  <div className="col-md-4">
+                    <div className="form-group">
+                      <label className="form-label">Lines</label>
+                      <div className="form-control-wrap">
+                        <input
+                          type="number"
+                          className="form-control"
+                          min="0"
+                          value={form.lines}
+                          onChange={(e) => setForm((f) => ({ ...f, lines: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {isDiagram && (
+                  <div className="col-md-4">
+                    <div className="form-group">
+                      <label className="form-label">Answer Space</label>
+                      <div className="form-control-wrap">
+                        <select
+                          className="form-control"
+                          value={form.boxSize}
+                          onChange={(e) => setForm((f) => ({ ...f, boxSize: e.target.value }))}
+                        >
+                          <option value="1">Half page box</option>
+                          <option value="2">Full page box</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {isMcq ? (
+                <>
+                  {["A", "B", "C", "D"].map((letter, index) => (
+                    <div className="form-group" key={letter}>
+                      <label className="form-label">Option {letter}</label>
+                      <div className="row gx-2">
+                        <div className="col-4 col-md-3">
+                          <input
+                            type="text"
+                            className="form-control"
+                            value={form[`optionKey${letter}`]}
+                            onChange={(e) => setForm((f) => ({ ...f, [`optionKey${letter}`]: e.target.value }))}
+                            placeholder={letter}
+                          />
+                        </div>
+                        <div className="col">
+                          <input
+                            type="text"
+                            className="form-control"
+                            value={form[`option${letter}`]}
+                            onChange={(e) => setForm((f) => ({ ...f, [`option${letter}`]: e.target.value }))}
+                            placeholder={`Option ${letter} text`}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="form-group">
+                    <label className="form-label">Correct Option</label>
+                    <div className="form-control-wrap">
+                      <select
+                        className="form-control"
+                        value={form.correctOption}
+                        onChange={(e) => setForm((f) => ({ ...f, correctOption: e.target.value }))}
+                      >
+                        <option value="">Select correct answer</option>
+                        {mcqOptionKeys.map((key) => (
+                          <option key={key} value={key}>
+                            {key}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="alert alert-info">
+                  Options and correct answer are not required for detailed or diagram questions.
+                </div>
+              )}
               {error && <div className="alert alert-danger">{error}</div>}
               {message && <div className="alert alert-success">{message}</div>}
               <div className="form-group question-form-footer">

@@ -20,6 +20,11 @@ import questionSheet from "@/images/sheet_questions.png";
 import answerSheet from "@/images/sheet_answer.png";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "https://examiner.ideageek.pk";
+const EXAM_TYPES = [
+  { value: 0, label: "MCQ" },
+  { value: 1, label: "Detailed" },
+];
+const getExamTypeLabel = (value) => EXAM_TYPES.find((t) => t.value === value)?.label || "Unknown";
 const blankForm = {
   name: "",
   subject: "",
@@ -28,6 +33,7 @@ const blankForm = {
   totalMarks: "",
   questionCount: "",
   examDate: "",
+  type: "0",
 };
 
 const ExamList = () => {
@@ -55,14 +61,16 @@ const ExamList = () => {
   const [scoreLoading, setScoreLoading] = useState(false);
   const [students, setStudents] = useState([]);
   const [scoreStudentId, setScoreStudentId] = useState("");
+  const [sheetLoadingId, setSheetLoadingId] = useState(null);
 
   const loadExams = async () => {
     setLoading(true);
     setError("");
     try {
       const res = await client({ path: "/api/exams", method: "GET" });
-      if (!res.ok) throw new Error(res?.data?.message || "Unable to fetch exams");
-      setItems(Array.isArray(res.data) ? res.data : res.data?.data || []);
+      if (!res.success) throw new Error(res.message || "Unable to fetch exams");
+      const data = Array.isArray(res.value) ? res.value : [];
+      setItems(data);
     } catch (err) {
       setError(err.message || "Failed to load exams.");
     } finally {
@@ -73,8 +81,8 @@ const ExamList = () => {
   const loadSchools = async () => {
     try {
       const res = await client({ path: "/api/schools", method: "GET" });
-      if (!res.ok) throw new Error(res?.data?.message || "Unable to fetch schools");
-      const data = Array.isArray(res.data) ? res.data : res.data?.data || [];
+      if (!res.success) throw new Error(res.message || "Unable to fetch schools");
+      const data = Array.isArray(res.value) ? res.value : [];
       setSchools(data);
     } catch (err) {
       // ignore
@@ -84,8 +92,8 @@ const ExamList = () => {
   const loadClasses = async () => {
     try {
       const res = await client({ path: "/api/classes", method: "GET" });
-      if (!res.ok) throw new Error(res?.data?.message || "Unable to fetch classes");
-      const data = Array.isArray(res.data) ? res.data : res.data?.data || [];
+      if (!res.success) throw new Error(res.message || "Unable to fetch classes");
+      const data = Array.isArray(res.value) ? res.value : [];
       setClasses(data);
     } catch (err) {
       // ignore
@@ -95,8 +103,8 @@ const ExamList = () => {
   const loadStudents = async () => {
     try {
       const res = await client({ path: "/api/students", method: "GET" });
-      if (!res.ok) throw new Error(res?.data?.message || "Unable to fetch students");
-      const data = Array.isArray(res.data) ? res.data : res.data?.data || [];
+      if (!res.success) throw new Error(res.message || "Unable to fetch students");
+      const data = Array.isArray(res.value) ? res.value : [];
       setStudents(data);
     } catch (err) {
       // ignore; dropdown will stay empty
@@ -124,10 +132,11 @@ const ExamList = () => {
         totalMarks: form.totalMarks ? Number(form.totalMarks) : null,
         questionCount: form.questionCount ? Number(form.questionCount) : null,
         examDate: form.examDate || null,
+        type: form.type ? Number(form.type) : 0,
       };
       const path = editingId ? `/api/exams/${editingId}/update` : "/api/exams";
       const res = await client({ path, method: "POST", body: payload });
-      if (!res.ok) throw new Error(res?.data?.message || "Save failed");
+      if (!res.success) throw new Error(res.message || "Save failed");
       setMessage(editingId ? "Exam updated." : "Exam created.");
       setForm(blankForm);
       setEditingId(null);
@@ -150,6 +159,7 @@ const ExamList = () => {
       totalMarks: item.totalMarks?.toString() || "",
       questionCount: item.questionCount?.toString() || "",
       examDate: item.examDate ? item.examDate.split("T")[0] : "",
+      type: (item.type ?? 0).toString(),
     });
     setShowDrawer(true);
   };
@@ -162,7 +172,7 @@ const ExamList = () => {
     setMessage("");
     try {
       const res = await client({ path: `/api/exams/${id}/delete`, method: "POST" });
-      if (!res.ok) throw new Error(res?.data?.message || "Delete failed");
+      if (!res.success) throw new Error(res.message || "Delete failed");
       setMessage("Exam deleted.");
       setItems((prev) => prev.filter((it) => (it.id || it.examId || it._id) !== id));
     } catch (err) {
@@ -195,6 +205,46 @@ const ExamList = () => {
     setScoreLoading(false);
   };
 
+  const downloadSheet = async ({ exam, type }) => {
+    if (!exam?.id && !exam?.examId) return;
+    const examId = exam.id || exam.examId;
+    const normalizedBase = API_BASE.replace(/\/+$/, "");
+    const questionSheetPath =
+      Number(exam.type ?? 0) === 0
+        ? `/api/question-sheets/generate-question-sheet/${examId}`
+        : `/api/question-sheets/generate-detail-question-sheet/${examId}`;
+    const answerSheetPath = `/api/question-sheets/generate-answer-sheet/${examId}`;
+    const path = type === "answer" ? answerSheetPath : questionSheetPath;
+    const filename =
+      type === "answer"
+        ? `${exam.name || "exam"}-answer-sheet.pdf`
+        : `${exam.name || "exam"}-question-sheet.pdf`;
+
+    setSheetLoadingId(examId);
+    setError("");
+    setMessage("");
+    try {
+      const res = await fetch(`${normalizedBase}${path}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`Download failed (HTTP ${res.status})`);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(blobUrl);
+      setMessage(type === "answer" ? "Answer sheet downloaded." : "Question sheet downloaded.");
+    } catch (err) {
+      setError(err.message || "Sheet download failed.");
+    } finally {
+      setSheetLoadingId(null);
+    }
+  };
+
   const handleCalculateScore = async (e) => {
     e.preventDefault();
     if (!scoreExamId) return;
@@ -218,8 +268,8 @@ const ExamList = () => {
         method: "POST",
         body: formData,
       });
-      if (!res.ok) throw new Error(res?.data?.message || "Unable to calculate score.");
-      setScoreResult(res.data);
+      if (!res.success) throw new Error(res.message || "Unable to calculate score.");
+      setScoreResult(res.value ?? res.data);
     } catch (err) {
       setScoreError(err.message || "Calculate score failed.");
     } finally {
@@ -304,6 +354,7 @@ const ExamList = () => {
                         <tr>
                           <th>Name</th>
                           <th>Subject</th>
+                          <th>Type</th>
                           <th>Class</th>
                           <th>Date</th>
                           <th>Total Marks</th>
@@ -314,12 +365,12 @@ const ExamList = () => {
                       <tbody>
                         {loading && (
                           <tr>
-                            <td colSpan="7">Loading...</td>
+                            <td colSpan="8">Loading...</td>
                           </tr>
                         )}
                         {!loading && items.length === 0 && (
                           <tr>
-                            <td colSpan="7">No exams found.</td>
+                            <td colSpan="8">No exams found.</td>
                           </tr>
                         )}
                         {!loading &&
@@ -331,33 +382,60 @@ const ExamList = () => {
                               item.schoolId ||
                               item.schoolID ||
                               "Unknown school";
-                            const classLabel = item.className || `Class ${item.classId || item.classID || "—"}`;
-                            const dateLabel = item.examDate ? new Date(item.examDate).toLocaleDateString() : "—";
+                            const classLabel =
+                              item.className ||
+                              item.class?.name ||
+                              (item.classId || item.classID ? `Class ${item.classId || item.classID}` : "Unknown class");
+                            const dateLabel = item.examDate ? new Date(item.examDate).toLocaleDateString() : "-";
+                            const examTypeLabel = getExamTypeLabel(Number(item.type ?? 0));
                             return (
                               <tr key={id}>
                                 <td>
-                                  <div className="lead-text mb-1">{item.name || "—"}</div>
+                                  <div className="lead-text mb-1">{item.name || "-"}</div>
                                   <span className="sub-text text-soft">{schoolLabel}</span>
                                 </td>
-                                <td>{item.subject || "—"}</td>
+                                <td>{item.subject || "-"}</td>
+                                <td>
+                                  <span className="badge bg-light text-dark">{examTypeLabel}</span>
+                                </td>
                                 <td>{classLabel}</td>
                                 <td>{dateLabel}</td>
-                                <td>{item.totalMarks ?? "—"}</td>
-                                <td>{item.questionCount ?? "—"}</td>
+                                <td>{item.totalMarks ?? "-"}</td>
+                                <td>{item.questionCount ?? "-"}</td>
                                 <td className="text-end">
                                   <div className="d-flex flex-wrap justify-content-end">
                                     <Button
                                       size="sm"
-                                      color="warning"
-                                      outline
-                                      className="me-1 mb-1"
-                                      onClick={() => openScoreModal(id)}
-                                    >
-                                      Calculate Score
-                                    </Button>
-                                    <Button size="sm" color="light" className="me-1 mb-1" onClick={() => handleEdit(item)}>
-                                      <Icon name="edit" />
-                                    </Button>
+                                    color="warning"
+                                    outline
+                                    className="me-1 mb-1"
+                                    onClick={() => openScoreModal(id)}
+                                  >
+                                    Calculate Score
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    color="success"
+                                    outline
+                                    className="me-1 mb-1"
+                                    disabled={sheetLoadingId === id}
+                                    onClick={() => downloadSheet({ exam: item, type: "question" })}
+                                  >
+                                    {sheetLoadingId === id ? "Downloading..." : "Question Sheet"}
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    color="info"
+                                    outline
+                                    className="me-1 mb-1"
+                                    disabled={sheetLoadingId === id}
+                                    onClick={() => downloadSheet({ exam: item, type: "answer" })}
+                                  >
+                                    {sheetLoadingId === id ? "Downloading..." : "Answer Sheet"}
+                                  </Button>
+                                  <Button size="sm" color="light" className="me-1 mb-1" onClick={() => handleEdit(item)}>
+                                    <Icon name="edit" />
+                                  </Button>
                                     <Button size="sm" color="danger" outline onClick={() => handleDelete(id)}>
                                       <Icon name="trash" />
                                     </Button>
@@ -409,6 +487,22 @@ const ExamList = () => {
                     value={form.subject}
                     onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))}
                   />
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Exam Type</label>
+                <div className="form-control-wrap">
+                  <select
+                    className="form-control"
+                    value={form.type}
+                    onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
+                  >
+                    {EXAM_TYPES.map((type) => (
+                      <option key={type.value} value={type.value}>
+                        {type.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <div className="form-group">

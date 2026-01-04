@@ -81,11 +81,24 @@ export const createApiClient = ({ baseUrl = "", getToken, tokenPrefix = "Bearer"
       data = rawText;
     }
 
+    const normalizedValue = data?.value ?? data?.data ?? data;
+    const normalizedCount =
+      typeof data?.count === "number" ? data.count : Array.isArray(normalizedValue) ? normalizedValue.length : undefined;
+    const normalizedMessage = data?.message ?? data?.Message ?? response.statusText ?? "";
+    const normalizedError = data?.error;
+    const success = response.ok && normalizedError !== true;
+
     return {
       ok: response.ok,
+      success,
       status: response.status,
       statusText: response.statusText,
       data,
+      value: normalizedValue,
+      count: normalizedCount,
+      message: normalizedMessage,
+      error: normalizedError,
+      code: data?.code,
       rawText,
       headers: Object.fromEntries(response.headers.entries()),
       url: targetUrl,

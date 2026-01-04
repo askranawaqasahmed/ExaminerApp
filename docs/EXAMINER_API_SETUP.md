@@ -11,7 +11,8 @@
 - `src/pages/auth/Login.jsx` pre-fills approved credentials (`superadmin@examiner.com` / `SuperAdmin@123`) and shows a loader while authenticating.
 
 ## API Client & Console
-- `src/utils/apiClient.js` exports a generic `createApiClient` that builds URLs, serializes bodies/queries, and attaches `Authorization` headers (with a `skipToken` toggle for login).
+- APIs now return an envelope `{ code, date, error, message, value, count }`. `src/utils/apiClient.js` normalizes this, exposing `success`, `value`, `count`, and `message` while preserving the raw body.
+- `src/utils/apiClient.js` builds URLs, serializes bodies/queries, and attaches `Authorization` headers (with a `skipToken` toggle for login).
 - The API console fetches Swagger at runtime via `src/hooks/useSwagger.js`, edifies grouped navigation, and renders operations with `src/components/swagger/OperationRunner.jsx`. CRUD inputs for all parameters/bodies are supported, and responses are prettified.
 - Sidebar navigation filters operations by the current module tag when visiting `/api-explorer/<tag>`, and the downloaded tokens are sent as `Authorization: Bearer <token>` on every request except login.
 
@@ -21,16 +22,20 @@
 - The grid shows class name, school name, and section, with edit/delete actions preloading the drawer or calling the delete endpoint.
 
 ## Exam CRUD Experience
-- `/api/exams` is surfaced by `src/pages/exams/ExamList.jsx`, which displays exam name, subject, class information, date, total marks, and question count.
-- The drawer submits `name`, `subject`, `school`, `class`, `totalMarks`, `questionCount`, and `examDate` to `/api/exams`, `/api/exams/{id}/update`, and `/api/exams/{id}/delete`. The school dropdown drives the class dropdown so only matching classes appear.
+- `/api/exams` is surfaced by `src/pages/exams/ExamList.jsx`, which displays exam name, subject, type, class information, date, total marks, and question count.
+- The drawer submits `name`, `subject`, `type` (0=MCQ, 1=Detailed), `school`, `class`, `totalMarks`, `questionCount`, and `examDate` to `/api/exams`, `/api/exams/{id}/update`, and `/api/exams/{id}/delete`. The school dropdown drives the class dropdown so only matching classes appear.
+- Each exam row now includes buttons to generate sheets via the API: MCQ exams hit `/api/question-sheets/generate-question-sheet/{examId}`, detailed exams hit `/api/question-sheets/generate-detail-question-sheet/{examId}`, and answer sheets use `/api/question-sheets/generate-answer-sheet/{examId}`.
 
 ## Question CRUD Experience
 - `/api/questions` is managed by `src/pages/questions/QuestionList.jsx`. Questions are filtered by exam (`GET /api/questions/by-exam/{examId}`) and saved via `/api/questions` or `/api/questions/{id}/update`. Deletions hit `/api/questions/{id}/delete`.
-- The table shows question number, text, options, and the correct answer; the drawer captures all four options plus the right option and ties each question to an exam.
-- Saves accept both the legacy `optionA`-`optionD` fields and a structured `options` array: e.g. `[ { option: "A", text: "Choice A", index: 0, isCorrect: true }, ... ]`. The form pre-fills from either shape and derives `correctOption`/`correctAnswer` from any `isCorrect` flag.
+- Question types:
+  - `type=0` (MCQ): captures option key/text pairs and a `correctOption`.
+  - `type=1` (Detailed): captures `marks` and `lines`; no options/correct answer.
+  - `type=2` (Diagram): captures `marks` and `boxSize` (1=half page, 2=full page); no options/correct answer.
+- The drawer adapts fields per type and still accepts legacy `optionA`-`optionD`; MCQ saves a structured `options` array.
 
 ## Exam Sheets & Scoring
-- Exam list (`src/pages/exams/ExamList.jsx`) includes header buttons to download static sheet templates (`src/images/sheet_questions.png`, `src/images/sheet_answer.png`) plus a per-exam action to calculate scores.
+- Exam list (`src/pages/exams/ExamList.jsx`) includes header buttons to download static sheet templates (`src/images/sheet_questions.png`, `src/images/sheet_answer.png`), per-exam buttons to generate question/answer sheets via the API (MCQ vs detailed endpoints), and a per-exam action to calculate scores.
 - **Calculate Score** opens a modal with a student dropdown (students loaded via `GET /api/students`) and a file upload. Submission posts multipart form data to `POST /api/question-sheets/{examId}/calculate-score` with fields `studentId` and `answerSheet` (binary file).
 - Score responses render in a friendly summary table (exam, student, totals, correct/wrong, note) plus a per-question breakdown with clear Correct/Wrong badges—no raw JSON shown.
 
@@ -41,3 +46,4 @@
 ## Notes
 - You can change `VITE_API_BASE` to point at a different backend (defaults to `https://examiner.ideageek.pk`).
 - For production, swap the placeholder login form with your real identity provider, ensuring the token is persisted where `AuthContext` expects it.
+- `scripts/apiSmoke.js` runs a quick envelope and question-type sanity check (login, list exams, load questions).

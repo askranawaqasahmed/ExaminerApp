@@ -47,8 +47,9 @@ const StudentList = () => {
     setError("");
     try {
       const res = await client({ path: "/api/students", method: "GET" });
-      if (!res.ok) throw new Error(res?.data?.message || "Unable to fetch students");
-      setStudents(Array.isArray(res.data) ? res.data : res.data?.data || []);
+      if (!res.success) throw new Error(res.message || "Unable to fetch students");
+      const data = Array.isArray(res.value) ? res.value : [];
+      setStudents(data);
     } catch (err) {
       setError(err.message || "Failed to load students.");
     } finally {
@@ -59,8 +60,8 @@ const StudentList = () => {
   const loadClasses = async () => {
     try {
       const res = await client({ path: "/api/classes", method: "GET" });
-      if (!res.ok) throw new Error(res?.data?.message || "Unable to fetch classes");
-      const data = Array.isArray(res.data) ? res.data : res.data?.data || [];
+      if (!res.success) throw new Error(res.message || "Unable to fetch classes");
+      const data = Array.isArray(res.value) ? res.value : [];
       setClasses(data);
     } catch (err) {
       // ignore
@@ -70,8 +71,8 @@ const StudentList = () => {
   const loadSchools = async () => {
     try {
       const res = await client({ path: "/api/schools", method: "GET" });
-      if (!res.ok) throw new Error(res?.data?.message || "Unable to fetch schools");
-      const data = Array.isArray(res.data) ? res.data : res.data?.data || [];
+      if (!res.success) throw new Error(res.message || "Unable to fetch schools");
+      const data = Array.isArray(res.value) ? res.value : [];
       setSchools(data);
     } catch (err) {
       // ignore
@@ -103,7 +104,7 @@ const StudentList = () => {
       };
       const path = editingId ? `/api/students/${editingId}/update` : "/api/students";
       const res = await client({ path, method: "POST", body: payload });
-      if (!res.ok) throw new Error(res?.data?.message || "Save failed");
+      if (!res.success) throw new Error(res.message || "Save failed");
       setMessage(editingId ? "Student updated." : "Student created.");
       setForm(blankForm);
       setEditingId(null);
@@ -138,7 +139,7 @@ const StudentList = () => {
     setMessage("");
     try {
       const res = await client({ path: `/api/students/${id}/delete`, method: "POST" });
-      if (!res.ok) throw new Error(res?.data?.message || "Delete failed");
+      if (!res.success) throw new Error(res.message || "Delete failed");
       setMessage("Student deleted.");
       setStudents((prev) => prev.filter((item) => getId(item) !== id));
     } catch (err) {

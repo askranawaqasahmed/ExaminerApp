@@ -34,10 +34,10 @@ const Login = () => {
         body: { username, password },
         skipToken: true,
       });
-      if (!res.ok) {
-        throw new Error(res?.data?.message || "Invalid credentials");
+      if (!res.success) {
+        throw new Error(res.message || "Invalid credentials");
       }
-      const payload = res.data || {};
+      const payload = res.value ?? res.data ?? {};
       const token =
         payload.token ||
         payload.accessToken ||

@@ -37,8 +37,9 @@ const SchoolList = () => {
     setError("");
     try {
       const res = await client({ path: "/api/schools", method: "GET" });
-      if (!res.ok) throw new Error(res?.data?.message || "Unable to fetch schools");
-      setItems(Array.isArray(res.data) ? res.data : res.data?.data || []);
+      if (!res.success) throw new Error(res.message || "Unable to fetch schools");
+      const data = Array.isArray(res.value) ? res.value : [];
+      setItems(data);
     } catch (err) {
       setError(err.message || "Failed to load schools.");
     } finally {
@@ -63,7 +64,7 @@ const SchoolList = () => {
       };
       const path = editingId ? `/api/schools/${editingId}/update` : "/api/schools";
       const res = await client({ path, method: "POST", body: payload });
-      if (!res.ok) throw new Error(res?.data?.message || "Save failed");
+      if (!res.success) throw new Error(res.message || "Save failed");
       setMessage(editingId ? "School updated." : "School created.");
       setForm(blankForm);
       setEditingId(null);
@@ -95,7 +96,7 @@ const SchoolList = () => {
     setMessage("");
     try {
       const res = await client({ path: `/api/schools/${id}/delete`, method: "POST" });
-      if (!res.ok) throw new Error(res?.data?.message || "Delete failed");
+      if (!res.success) throw new Error(res.message || "Delete failed");
       setMessage("School deleted.");
       setItems((prev) => prev.filter((it) => (it.id || it.schoolId || it._id) !== id));
     } catch (err) {
